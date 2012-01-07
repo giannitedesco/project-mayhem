@@ -1,0 +1,17 @@
+#!/bin/sh
+
+config=Config.mak
+rm -f ${config}
+
+sname=`uname -s`
+test $? -eq 0 || exit 1
+os=""
+case "$sname" in
+	Linux|linux)
+		os=linux
+		;;
+	*)
+		echo "Unsupported OS: $sname"
+		exit 1
+esac
+echo "Detected kernel: $os"

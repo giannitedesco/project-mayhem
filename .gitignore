@@ -1,0 +1,6 @@
+.*.d
+*.o
+wmdump
+wmpdump.exe
+Config.mak
+.*.swp
