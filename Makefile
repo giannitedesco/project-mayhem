@@ -23,9 +23,17 @@ CFLAGS := -g -pipe -O2 -Wall \
 	-Iinclude \
 	$(EXTRA_DEFS)
 
+ifeq ($(OS), win32)
+OS_OBJ := blob_win32.o
+else
+OS_OBJ := blob.o
+endif
+
 WMDUMP_BIN := wmdump$(SUFFIX)
 WMDUMP_LIBS := 
-WMDUMP_OBJ = main.o
+WMDUMP_OBJ = $(OS_OBJ) \
+		vars.o \
+		main.o
 
 ALL_BIN := $(WMDUMP_BIN)
 ALL_OBJ := $(WMDUMP_OBJ)
@@ -34,7 +42,7 @@ ALL_TARGETS := $(ALL_BIN)
 
 TARGET: all
 
-.PHONY: all clean walk
+.PHONY: all clean
 
 all: $(ALL_BIN)
 
