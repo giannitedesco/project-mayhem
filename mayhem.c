@@ -5,14 +5,16 @@
 #include <wmdump.h>
 #include <wmvars.h>
 #include <mayhem.h>
-#include <os.h>
 
 #include <rtmp/amf.h>
 #include <rtmp/rtmp.h>
 #include <rtmp/netconn.h>
+#include <flv.h>
 
 #include "cvars.h"
 #include "mayhem-amf.h"
+
+#include <time.h>
 
 #define MAYHEM_STATE_ABORT		0
 #define MAYHEM_STATE_CONNECTING		1
@@ -23,10 +25,12 @@
 #define MAYHEM_STATE_PAUSED		6
 
 struct _mayhem {
-	unsigned int state;
-	unsigned int sid;
+	char *bitch;
 	rtmp_t rtmp;
 	netconn_t nc;
+	FILE *flv;
+	unsigned int state;
+	unsigned int sid;
 };
 
 struct naiad_room {
@@ -37,6 +41,17 @@ struct naiad_room {
 static void mayhem_abort(struct _mayhem *m)
 {
 	m->state = MAYHEM_STATE_ABORT;
+}
+
+static int update_bitch(struct _mayhem *m, const char *bitch)
+{
+	char *b = strdup(bitch);
+
+	if ( NULL == b )
+		return 0;
+
+	m->bitch = b;
+	return 1;
 }
 
 static int NaiadAuthorize(mayhem_t m, int code,
@@ -50,6 +65,7 @@ static int NaiadAuthorize(mayhem_t m, int code,
 	printf(" performer: %s\n", bitch);
 	printf(" room flags: %d (0x%x)\n", room->flags, room->flags);
 	printf(" topic is: %s\n", (room->topic) ? room->topic : "");
+	update_bitch(m, bitch);
 	m->state = MAYHEM_STATE_AUTHORIZED;
 	return 1;
 }
@@ -243,6 +259,8 @@ static int play(struct _mayhem *m)
 void mayhem_close(mayhem_t m)
 {
 	if ( m ) {
+		free(m->bitch);
+		netconn_free(m->nc);
 		rtmp_close(m->rtmp);
 		free(m);
 	}
@@ -251,7 +269,11 @@ void mayhem_close(mayhem_t m)
 static int notify(void *priv, struct rtmp_pkt *pkt,
 			const uint8_t *buf, size_t sz)
 {
+	struct _mayhem *m = priv;
 	invoke_t inv;
+
+	flv_rip(m->flv, pkt, buf, sz);
+
 	inv = amf_invoke_from_buf(buf, sz);
 	if ( inv ) {
 		amf_invoke_pretty_print(inv);
@@ -260,10 +282,33 @@ static int notify(void *priv, struct rtmp_pkt *pkt,
 	return 1;
 }
 
+static int rip(void *priv, struct rtmp_pkt *pkt,
+			const uint8_t *buf, size_t sz)
+{
+	struct _mayhem *m = priv;
+	flv_rip(m->flv, pkt, buf, sz);
+	return 1;
+}
+
 static int stream_start(void *priv)
 {
-	//struct _mayhem *m = priv;
-	printf("mayhem: create FLV\n");
+	struct _mayhem *m = priv;
+	char buf[strlen(m->bitch) + 128];
+	char tmbuf[128];
+	struct tm *tm;
+	time_t t;
+
+	t = time(NULL);
+
+	tm = localtime(&t);
+	strftime(tmbuf, sizeof(tmbuf), "%F-%H-%M-%S", tm);
+	snprintf(buf, sizeof(buf), "%s-%s.flv", m->bitch, tmbuf);
+
+	if ( m->flv )
+		flv_close(m->flv);
+	m->flv = flv_creat(buf);
+
+	printf("mayhem: create FLV: %s\n", buf);
 	return 1;
 }
 
@@ -273,6 +318,8 @@ mayhem_t mayhem_connect(wmvars_t vars)
 	static const struct rtmp_ops ops = {
 		.invoke = dispatch,
 		.notify = notify,
+		.audio = rip,
+		.video = rip,
 		.stream_start = stream_start,
 	};
 

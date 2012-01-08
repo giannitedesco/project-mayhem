@@ -37,6 +37,7 @@ WMDUMP_OBJ = $(OS_OBJ) \
 		netconn.o \
 		rtmp.o \
 		amf.o \
+		flv.o \
 		mayhem.o \
 		mayhem-amf.o \
 		main.o

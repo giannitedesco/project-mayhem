@@ -30,6 +30,8 @@ out:
 
 int main(int argc, char **argv)
 {
+	setvbuf(stdout, (char *) NULL, _IOLBF, 0);
+
 	if ( argc < 2 ) {
 		fprintf(stderr, "Usage:\t%s <varfile>\n", argv[0]);
 		return EXIT_FAILURE;
