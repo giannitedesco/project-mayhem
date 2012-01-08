@@ -248,7 +248,8 @@ void mayhem_close(mayhem_t m)
 	}
 }
 
-static int notify(void *priv, const uint8_t *buf, size_t sz)
+static int notify(void *priv, struct rtmp_pkt *pkt,
+			const uint8_t *buf, size_t sz)
 {
 	invoke_t inv;
 	inv = amf_invoke_from_buf(buf, sz);

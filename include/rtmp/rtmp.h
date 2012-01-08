@@ -10,9 +10,21 @@
 
 typedef struct _rtmp *rtmp_t;
 
+struct rtmp_pkt {
+	int chan;
+	uint32_t dest;
+	uint32_t ts;
+	uint8_t type;
+};
+
 struct rtmp_ops {
 	int(*invoke)(void *priv, invoke_t inv);
-	int(*notify)(void *priv, const uint8_t *buf, size_t len);
+	int(*notify)(void *priv, struct rtmp_pkt *pkt,
+			const uint8_t *buf, size_t len);
+	int(*audio)(void *priv, struct rtmp_pkt *pkt,
+			const uint8_t *buf, size_t len);
+	int(*video)(void *priv, struct rtmp_pkt *pkt,
+			const uint8_t *buf, size_t len);
 	int(*stream_start)(void *priv);
 };
 

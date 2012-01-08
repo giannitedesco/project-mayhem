@@ -339,7 +339,7 @@ void rtmp_set_handlers(rtmp_t r, const struct rtmp_ops *ops, void *priv)
 	r->ev_priv = priv;
 }
 
-static int r_invoke(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
+static int r_invoke(struct _rtmp *r, struct rtmp_pkt *pkt,
 			 const uint8_t *buf, size_t sz)
 {
 	invoke_t inv;
@@ -349,7 +349,7 @@ static int r_invoke(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 	if ( NULL == inv )
 		goto out;
 
-	dprintf("rtmp: invoke: chan=0x%x dest=0x%x\n", chan, dest);
+	dprintf("rtmp: invoke: chan=0x%x dest=0x%x\n", pkt->chan, pkt->dest);
 	if ( r->ev_ops && r->ev_ops->invoke ) {
 		ret = (*r->ev_ops->invoke)(r->ev_priv, inv);
 		if ( !ret ) {
@@ -366,17 +366,7 @@ out:
 	return 1;
 }
 
-static int r_notify(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
-			 const uint8_t *buf, size_t sz)
-{
-	dprintf("rtmp: notify: chan=0x%x dest=0x%x\n", chan, dest);
-	if ( r->ev_ops && r->ev_ops->notify ) {
-		return (*r->ev_ops->notify)(r->ev_priv, buf, sz);
-	}
-	return 1;
-}
-
-static int r_ctl(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
+static int r_ctl(struct _rtmp *r, struct rtmp_pkt *pkt,
 			 const uint8_t *buf, size_t sz)
 {
 	uint16_t type;
@@ -411,7 +401,7 @@ static int r_ctl(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 	return 1;
 }
 
-static int r_server_bw(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
+static int r_server_bw(struct _rtmp *r, struct rtmp_pkt *pkt,
 			 const uint8_t *buf, size_t sz)
 {
 	dprintf("rtmp: received: SERVER_BW\n");
@@ -422,7 +412,7 @@ static int r_server_bw(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 	return send_server_bw(r);
 }
 
-static int r_client_bw(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
+static int r_client_bw(struct _rtmp *r, struct rtmp_pkt *pkt,
 			 const uint8_t *buf, size_t sz)
 {
 	dprintf("rtmp: received: CLIENT_BW\n");
@@ -436,7 +426,7 @@ static int r_client_bw(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 	return 1;
 }
 
-static int r_chunksz(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
+static int r_chunksz(struct _rtmp *r, struct rtmp_pkt *pkt,
 			 const uint8_t *buf, size_t sz)
 {
 	if ( sz < sizeof(uint32_t) )
@@ -445,29 +435,35 @@ static int r_chunksz(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 	return 1;
 }
 
-static int r_audio(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
+static int r_notify(struct _rtmp *r, struct rtmp_pkt *pkt,
 			 const uint8_t *buf, size_t sz)
 {
-	static int done;
-	if ( !done ) {
-		done = 1;
-		printf("rtmp: streaming audio\n");
+	dprintf("rtmp: notify: chan=0x%x dest=0x%x\n", pkt->chan, pkt->dest);
+	if ( r->ev_ops && r->ev_ops->notify ) {
+		return (*r->ev_ops->notify)(r->ev_priv, pkt, buf, sz);
 	}
 	return 1;
 }
 
-static int r_video(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
+static int r_audio(struct _rtmp *r, struct rtmp_pkt *pkt,
 			 const uint8_t *buf, size_t sz)
 {
-	static int done;
-	if ( !done ) {
-		done = 1;
-		printf("rtmp: streaming video\n");
+	if ( r->ev_ops && r->ev_ops->audio ) {
+		return (*r->ev_ops->audio)(r->ev_priv, pkt, buf, sz);
 	}
 	return 1;
 }
 
-typedef int (*rmsg_t)(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
+static int r_video(struct _rtmp *r, struct rtmp_pkt *pkt,
+			 const uint8_t *buf, size_t sz)
+{
+	if ( r->ev_ops && r->ev_ops->video ) {
+		return (*r->ev_ops->video)(r->ev_priv, pkt, buf, sz);
+	}
+	return 1;
+}
+
+typedef int (*rmsg_t)(struct _rtmp *r, struct rtmp_pkt *pkt,
 			 const uint8_t *buf, size_t sz);
 
 static int rtmp_dispatch(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
@@ -483,6 +479,12 @@ static int rtmp_dispatch(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 		[RTMP_MSG_NOTIFY] r_notify,
 		[RTMP_MSG_INVOKE] r_invoke,
 	};
+	struct rtmp_pkt pkt;
+
+	pkt.chan = chan;
+	pkt.dest = dest;
+	pkt.ts = ts;
+	pkt.type = type;
 
 	if ( type >= ARRAY_SIZE(tbl) || NULL == tbl[type] ) {
 		printf(".id = %d (0x%x)\n", chan, chan);
@@ -494,7 +496,7 @@ static int rtmp_dispatch(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 		return 1;
 	}
 
-	return (*tbl[type])(r, chan, dest, ts, buf, sz);
+	return (*tbl[type])(r, &pkt, buf, sz);
 }
 
 /* sigh.. */
