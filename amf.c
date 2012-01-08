@@ -472,6 +472,10 @@ static struct _amf *parse_element(const uint8_t *buf, size_t sz, size_t *taken)
 		ret = amf_stringf("%.*s", slen, ptr);
 		ptr += slen;
 		break;
+	case AMF_ECMA_ARRAY:
+		if ( ptr + 4 > end )
+			return NULL;
+		ptr += 4;
 	case AMF_OBJECT:
 		ret = amf_object();
 		do {
@@ -499,6 +503,12 @@ static struct _amf *parse_element(const uint8_t *buf, size_t sz, size_t *taken)
 
 			memcpy(name, ptr, slen);
 			name[slen] = '\0';
+			ptr += slen;
+
+			if ( *ptr == AMF_OBJECT_END ) {
+				free(name);
+				break;
+			}
 
 			elem = parse_element(ptr, end - ptr, &t);
 			if ( NULL == elem ) {
@@ -515,6 +525,7 @@ static struct _amf *parse_element(const uint8_t *buf, size_t sz, size_t *taken)
 
 			ptr += t;
 		}while(*ptr != AMF_OBJECT_END);
+		ptr++;
 		break;
 	case AMF_NULL:
 		ret = amf_null();
@@ -548,16 +559,16 @@ static void do_pretty_print(amf_t a, unsigned int depth)
 		printf("%s\n", (a->u.b) ? "true" : "false");
 		break;
 	case AMF_STRING:
-		printf("'%s'\n", a->u.str);
+		printf("'%s'\n", a->u.str ? a->u.str : "");
 		break;
 	case AMF_OBJECT:
 		printf("{\n");
 		for(i = 0; i < a->u.obj.nmemb; i++) {
-			printf("%*c.%s = ", depth - 1, ' ',
+			printf("%*c.%s = ", depth, ' ',
 				a->u.obj.elem[i].key);
-			do_pretty_print(a->u.obj.elem[i].val, depth + 1);
+			do_pretty_print(a->u.obj.elem[i].val, depth + 4);
 		}
-		printf("%*c}\n", depth - 1, ' ');
+		printf("%*c}\n", depth - 4, ' ');
 		break;
 	case AMF_NULL:
 		printf("null\n");
@@ -572,7 +583,7 @@ static void do_pretty_print(amf_t a, unsigned int depth)
 
 void amf_pretty_print(amf_t a)
 {
-	do_pretty_print(a, 1);
+	do_pretty_print(a, 4);
 }
 
 void amf_invoke_pretty_print(invoke_t inv)
@@ -592,6 +603,8 @@ invoke_t amf_invoke_from_buf(const uint8_t *buf, size_t sz)
 	const uint8_t *end;
 	size_t taken;
 
+	//printf("==== AMF INVOKE ===\n");
+	//hex_dump(buf, sz, 16);
 	inv = amf_invoke_new(0);
 	if ( NULL == inv )
 		goto out;
