@@ -23,6 +23,7 @@
 
 #define RTMP_MAX_CHANNELS		65600
 
+#define RTMP_CTL_STREAM_BEGIN		0x0
 #define RTMP_CTL_PING			0x6
 #define RTMP_CTL_PONG			0x7
 

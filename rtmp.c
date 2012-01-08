@@ -379,6 +379,9 @@ static int r_ctl(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 	sz -= sizeof(type);
 
 	switch(type) {
+	case RTMP_CTL_STREAM_BEGIN:
+		printf("rtmp: Stream begin\n");
+		break;
 	case RTMP_CTL_PING:
 		printf("rtmp: PING\n");
 		if ( sz < sizeof(echo) )
@@ -429,6 +432,28 @@ static int r_chunksz(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 	return 1;
 }
 
+static int r_audio(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
+			 const uint8_t *buf, size_t sz)
+{
+	static int done;
+	if ( !done ) {
+		done = 1;
+		printf("rtmp: streaming audio\n");
+	}
+	return 1;
+}
+
+static int r_video(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
+			 const uint8_t *buf, size_t sz)
+{
+	static int done;
+	if ( !done ) {
+		done = 1;
+		printf("rtmp: streaming video\n");
+	}
+	return 1;
+}
+
 typedef int (*rmsg_t)(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 			 const uint8_t *buf, size_t sz);
 
@@ -440,6 +465,8 @@ static int rtmp_dispatch(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 		[RTMP_MSG_CTL] r_ctl,
 		[RTMP_MSG_SERVER_BW] r_server_bw,
 		[RTMP_MSG_CLIENT_BW] r_client_bw,
+		[RTMP_MSG_AUDIO] r_audio,
+		[RTMP_MSG_VIDEO] r_video,
 		[RTMP_MSG_INVOKE] r_invoke,
 	};
 
