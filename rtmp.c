@@ -14,7 +14,7 @@
 #define STATE_CONN_RESET	2
 #define STATE_HANDSHAKE_1	3
 #define STATE_HANDSHAKE_2	4
-#define STATE_CONNECTED		5
+#define STATE_CONNECTED		4 /* equivalent to handshake_2 */
 
 struct _rtmp {
 	unsigned int state;
@@ -240,7 +240,7 @@ again:
 	 * provided we won't chop off any outstanding data that is
 	*/
 	if ( r->chunk_sz != current_buf_sz(r) &&
-		r->chunk_sz >= (r->r_cur - r->r_buf) ) {
+		r->chunk_sz >= (size_t)(r->r_cur - r->r_buf) ) {
 		if ( !rbuf_update_size(r) )
 			return 0;
 	}
@@ -273,7 +273,11 @@ rtmp_t rtmp_connect(const char *tcUrl)
 	if ( !transition(r, STATE_HANDSHAKE_1) )
 		goto out_close;
 
-	rtmp_pump(r);
+	while ( r->state != STATE_CONNECTED ) {
+		printf("state is %d\n", r->state);
+		if ( !rtmp_pump(r) )
+			goto out_close;
+	}
 
 	/* success */
 	goto out;

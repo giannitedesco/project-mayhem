@@ -1,0 +1,41 @@
+/* This file is part of wmdump
+ * Copyright (c) 2011 Gianni Tedesco
+ * Released under the terms of GPLv3
+*/
+#ifndef _AMF__H
+#define _AMF__H
+
+typedef struct _invoke *invoke_t;
+typedef struct _amf *amf_t;
+
+#define AMF_NUMBER		0
+#define AMF_BOOLEAN		1
+#define AMF_STRING		2
+#define AMF_OBJECT		3
+#define AMF_NULL		5
+#define AMF_UNDEFINED		6
+#define AMF_OBJECT_END		9
+
+amf_t amf_number(double num);
+amf_t amf_bool(uint8_t val);
+amf_t amf_string(const char *str);
+amf_t amf_null(void);
+amf_t amf_undefined(void);
+
+amf_t amf_object(void);
+int amf_object_set(amf_t a, const char *name, amf_t obj);
+amf_t amf_object_get(amf_t a, const char *name);
+
+unsigned int amf_type(amf_t a);
+double amf_get_number(amf_t a);
+int amf_get_bool(amf_t a);
+const char *amf_get_string(amf_t a);
+
+void amf_free(amf_t a);
+
+invoke_t amf_invoke_new(unsigned int nmemb);
+int amf_invoke_set(invoke_t inv, unsigned int elem, amf_t obj);
+int amf_invoke_append(invoke_t inv, amf_t obj);
+void amf_invoke_free(invoke_t inv);
+
+#endif /* _AMF__H */

@@ -33,7 +33,9 @@ WMDUMP_BIN := wmdump$(SUFFIX)
 WMDUMP_LIBS := 
 WMDUMP_OBJ = $(OS_OBJ) \
 		cvars.o \
+		hexdump.o \
 		rtmp.o \
+		amf.o \
 		mayhem.o \
 		main.o
 
