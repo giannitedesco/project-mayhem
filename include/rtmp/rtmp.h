@@ -11,7 +11,9 @@
 typedef struct _rtmp *rtmp_t;
 
 rtmp_t rtmp_connect(const char *tcUrl);
-int rtmp_invoke(rtmp_t r, invoke_t inv);
+int rtmp_invoke(rtmp_t r, int chan, uint32_t dest, invoke_t inv);
+void rtmp_set_invoke_handler(rtmp_t r, int(*cb)(void *priv, invoke_t inv),
+				void *priv);
 int rtmp_pump(rtmp_t r);
 void rtmp_close(rtmp_t r);
 

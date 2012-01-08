@@ -39,6 +39,8 @@ invoke_t amf_invoke_new(unsigned int nmemb);
 invoke_t amf_invoke_from_buf(const uint8_t *buf, size_t sz);
 int amf_invoke_set(invoke_t inv, unsigned int elem, amf_t obj);
 int amf_invoke_append(invoke_t inv, amf_t obj);
+unsigned int amf_invoke_nargs(invoke_t inv);
+amf_t amf_invoke_get(invoke_t inv, unsigned int i);
 void amf_invoke_free(invoke_t inv);
 
 void amf_invoke_pretty_print(invoke_t inv);

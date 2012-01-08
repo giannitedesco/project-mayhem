@@ -33,12 +33,14 @@ struct rtmp_chan {
 };
 
 struct _rtmp {
+	uint8_t *r_buf;
+	uint8_t *r_cur;
+	int (*i_dispatch)(void *priv, invoke_t inv);
+	void *i_priv;
 	size_t chunk_sz;
 	size_t r_space;
 	unsigned int state;
 	uint32_t server_bw;
-	uint8_t *r_buf;
-	uint8_t *r_cur;
 	os_sock_t sock;
 
 	struct rtmp_chan chan[RTMP_MAX_CHANNELS];
@@ -278,18 +280,32 @@ static int handshake2(struct _rtmp *r)
 	return 1;
 }
 
+void rtmp_set_invoke_handler(rtmp_t r, int(*cb)(void *priv, invoke_t inv),
+				void *priv)
+{
+	r->i_dispatch = cb;
+	r->i_priv = priv;
+}
 static int r_invoke(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 			 const uint8_t *buf, size_t sz)
 {
 	invoke_t inv;
+	int ret = 0;
 
-	printf("rtmp: received: INVOKE\n");
 	inv = amf_invoke_from_buf(buf, sz);
 	if ( NULL == inv )
-		return 0;
+		goto out;
 
-	amf_invoke_pretty_print(inv);
+	printf("rtmp: invoke: chan=0x%x dest=0x%x\n", chan, dest);
+	if ( r->i_dispatch ) {
+		ret = (*r->i_dispatch)(r->i_priv, inv);
+	}else{
+		printf("rtmp: received: unhandled INVOKE\n");
+		amf_invoke_pretty_print(inv);
+		ret = 1;
+	}
 	amf_invoke_free(inv);
+out:
 	return 1;
 }
 
@@ -457,7 +473,7 @@ static ssize_t decode_rtmp(struct _rtmp *r, const uint8_t *buf, size_t sz)
 	return (ptr - buf);
 }
 
-int rtmp_invoke(rtmp_t r, invoke_t inv)
+int rtmp_invoke(rtmp_t r, int chan, uint32_t dest, invoke_t inv)
 {
 	uint8_t *buf;
 	size_t sz;
@@ -470,7 +486,7 @@ int rtmp_invoke(rtmp_t r, invoke_t inv)
 
 	amf_invoke_to_buf(inv, buf);
 
-	ret = rtmp_send(r, 3, 0, 1, RTMP_MSG_INVOKE, buf, sz);
+	ret = rtmp_send(r, chan, dest, 1, RTMP_MSG_INVOKE, buf, sz);
 	free(buf);
 	printf("rtmp: sent invoke:\n");
 	amf_invoke_pretty_print(inv);

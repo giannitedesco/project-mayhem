@@ -195,8 +195,12 @@ int amf_object_set(amf_t a, const char *name, amf_t obj)
 
 amf_t amf_object_get(amf_t a, const char *name)
 {
+	int idx;
 	assert(a->type == AMF_OBJECT);
-	return NULL;
+	idx = object_index(a, name);
+	if ( idx < 0 )
+		return NULL;
+	return a->u.obj.elem[idx].val;
 }
 
 void amf_free(amf_t a)
@@ -628,4 +632,16 @@ out_free:
 	inv = NULL;
 out:
 	return inv;
+}
+
+unsigned int amf_invoke_nargs(invoke_t inv)
+{
+	return inv->nmemb;
+}
+
+amf_t amf_invoke_get(invoke_t inv, unsigned int i)
+{
+	if ( i >= inv->nmemb )
+		return NULL;
+	return inv->elem[i];
 }
