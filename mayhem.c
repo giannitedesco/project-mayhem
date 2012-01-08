@@ -248,9 +248,32 @@ void mayhem_close(mayhem_t m)
 	}
 }
 
+static int notify(void *priv, const uint8_t *buf, size_t sz)
+{
+	invoke_t inv;
+	inv = amf_invoke_from_buf(buf, sz);
+	if ( inv ) {
+		amf_invoke_pretty_print(inv);
+		amf_invoke_free(inv);
+	}
+	return 1;
+}
+
+static int stream_start(void *priv)
+{
+	//struct _mayhem *m = priv;
+	printf("mayhem: create FLV\n");
+	return 1;
+}
+
 mayhem_t mayhem_connect(wmvars_t vars)
 {
 	struct _mayhem *m;
+	static const struct rtmp_ops ops = {
+		.invoke = dispatch,
+		.notify = notify,
+		.stream_start = stream_start,
+	};
 
 	m = calloc(1, sizeof(*m));
 	if ( NULL == m )
@@ -266,7 +289,7 @@ mayhem_t mayhem_connect(wmvars_t vars)
 	if ( NULL == m->nc )
 		goto out_free;
 
-	rtmp_set_invoke_handler(m->rtmp, dispatch, m);
+	rtmp_set_handlers(m->rtmp, &ops, m);
 
 	if ( !invoke_connect(m, vars) )
 		goto out_free_netconn;

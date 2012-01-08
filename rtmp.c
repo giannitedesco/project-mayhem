@@ -35,8 +35,8 @@ struct rtmp_chan {
 struct _rtmp {
 	uint8_t *r_buf;
 	uint8_t *r_cur;
-	int (*i_dispatch)(void *priv, invoke_t inv);
-	void *i_priv;
+	const struct rtmp_ops *ev_ops;
+	void *ev_priv;
 	size_t chunk_sz;
 	size_t r_space;
 	unsigned int state;
@@ -333,12 +333,12 @@ static int handshake2(struct _rtmp *r)
 	return 1;
 }
 
-void rtmp_set_invoke_handler(rtmp_t r, int(*cb)(void *priv, invoke_t inv),
-				void *priv)
+void rtmp_set_handlers(rtmp_t r, const struct rtmp_ops *ops, void *priv)
 {
-	r->i_dispatch = cb;
-	r->i_priv = priv;
+	r->ev_ops = ops;
+	r->ev_priv = priv;
 }
+
 static int r_invoke(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 			 const uint8_t *buf, size_t sz)
 {
@@ -350,8 +350,8 @@ static int r_invoke(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 		goto out;
 
 	dprintf("rtmp: invoke: chan=0x%x dest=0x%x\n", chan, dest);
-	if ( r->i_dispatch ) {
-		ret = (*r->i_dispatch)(r->i_priv, inv);
+	if ( r->ev_ops && r->ev_ops->invoke ) {
+		ret = (*r->ev_ops->invoke)(r->ev_priv, inv);
 		if ( !ret ) {
 			printf("rtmp: received: bad INVOKE\n");
 			amf_invoke_pretty_print(inv);
@@ -363,6 +363,16 @@ static int r_invoke(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 	}
 	amf_invoke_free(inv);
 out:
+	return 1;
+}
+
+static int r_notify(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
+			 const uint8_t *buf, size_t sz)
+{
+	dprintf("rtmp: notify: chan=0x%x dest=0x%x\n", chan, dest);
+	if ( r->ev_ops && r->ev_ops->notify ) {
+		return (*r->ev_ops->notify)(r->ev_priv, buf, sz);
+	}
 	return 1;
 }
 
@@ -381,6 +391,9 @@ static int r_ctl(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 	switch(type) {
 	case RTMP_CTL_STREAM_BEGIN:
 		printf("rtmp: Stream begin\n");
+		if ( r->ev_ops && r->ev_ops->stream_start ) {
+			return (*r->ev_ops->stream_start)(r->ev_priv);
+		}
 		break;
 	case RTMP_CTL_PING:
 		printf("rtmp: PING\n");
@@ -467,6 +480,7 @@ static int rtmp_dispatch(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 		[RTMP_MSG_CLIENT_BW] r_client_bw,
 		[RTMP_MSG_AUDIO] r_audio,
 		[RTMP_MSG_VIDEO] r_video,
+		[RTMP_MSG_NOTIFY] r_notify,
 		[RTMP_MSG_INVOKE] r_invoke,
 	};
 

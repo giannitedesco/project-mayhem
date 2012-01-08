@@ -10,11 +10,16 @@
 
 typedef struct _rtmp *rtmp_t;
 
+struct rtmp_ops {
+	int(*invoke)(void *priv, invoke_t inv);
+	int(*notify)(void *priv, const uint8_t *buf, size_t len);
+	int(*stream_start)(void *priv);
+};
+
 rtmp_t rtmp_connect(const char *tcUrl);
 int rtmp_invoke(rtmp_t r, int chan, uint32_t dest, invoke_t inv);
 int rtmp_flex_invoke(rtmp_t r, int chan, uint32_t dest, invoke_t inv);
-void rtmp_set_invoke_handler(rtmp_t r, int(*cb)(void *priv, invoke_t inv),
-				void *priv);
+void rtmp_set_handlers(rtmp_t r, const struct rtmp_ops *ops, void *priv);
 int rtmp_pump(rtmp_t r);
 void rtmp_close(rtmp_t r);
 
