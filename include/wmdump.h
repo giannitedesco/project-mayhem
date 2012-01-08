@@ -15,6 +15,12 @@
 
 #define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
 
+#if WMDUMP_DEBUG
+#define dprintf printf
+#else
+#define dprintf(x...) do {} while(0)
+#endif
+
 void hex_dumpf(FILE *f, const uint8_t *tmp, size_t len, size_t llen);
 void hex_dump(const uint8_t *ptr, size_t len, size_t llen);
 

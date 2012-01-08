@@ -191,7 +191,7 @@ static int rbuf_update_size(struct _rtmp *r)
 	uint8_t *new;
 	size_t ofs;
 
-	printf("rtmp: Change chunk size: %zu\n", r->chunk_sz);
+	dprintf("rtmp: Change chunk size: %zu\n", r->chunk_sz);
 	new = realloc(r->r_buf, r->chunk_sz + RTMP_HDR_MAX_SZ);
 	if ( NULL == new )
 		return transition(r, STATE_ABORT);
@@ -218,7 +218,7 @@ static int rbuf_request_size(struct _rtmp *r, size_t sz)
 
 	if ( sz <= current_buf_sz(r) ) {
 		/* shrink the buffer later, after we're done with it */
-		printf("rtmp: Request bufsz %zu: deferred\n", sz);
+		dprintf("rtmp: Request bufsz %zu: deferred\n", sz);
 		return 1;
 	}
 
@@ -250,7 +250,7 @@ static int handshake1(struct _rtmp *r)
 	if ( !rtmp_send_raw(r, buf, sizeof(buf)) )
 		return 0;
 
-	printf("rtmp: sent handshake 1\n");
+	dprintf("rtmp: sent handshake 1\n");
 	return 1;
 }
 
@@ -276,7 +276,7 @@ static int handshake2(struct _rtmp *r)
 	if ( !rbuf_request_size(r, RTMP_DEFAULT_CHUNK_SZ) )
 		return 0;
 
-	printf("rtmp: sent handshake 2\n");
+	dprintf("rtmp: sent handshake 2\n");
 	return 1;
 }
 
@@ -296,7 +296,7 @@ static int r_invoke(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 	if ( NULL == inv )
 		goto out;
 
-	printf("rtmp: invoke: chan=0x%x dest=0x%x\n", chan, dest);
+	dprintf("rtmp: invoke: chan=0x%x dest=0x%x\n", chan, dest);
 	if ( r->i_dispatch ) {
 		ret = (*r->i_dispatch)(r->i_priv, inv);
 	}else{
@@ -312,14 +312,14 @@ out:
 static int r_ping(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 			 const uint8_t *buf, size_t sz)
 {
-	printf("rtmp: received: CLIENT_BW\n");
+	dprintf("rtmp: received: CLIENT_BW\n");
 	return 1;
 }
 
 static int r_server_bw(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 			 const uint8_t *buf, size_t sz)
 {
-	printf("rtmp: received: SERVER_BW\n");
+	dprintf("rtmp: received: SERVER_BW\n");
 	if ( sz < sizeof(uint32_t) )
 		return 0;
 
@@ -330,7 +330,7 @@ static int r_server_bw(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 static int r_client_bw(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 			 const uint8_t *buf, size_t sz)
 {
-	printf("rtmp: received: CLIENT_BW\n");
+	dprintf("rtmp: received: CLIENT_BW\n");
 	return 1;
 }
 
@@ -448,9 +448,9 @@ static ssize_t decode_rtmp(struct _rtmp *r, const uint8_t *buf, size_t sz)
 	pkt->p_cur += chunk_sz;
 	pkt->p_left -= chunk_sz;
 
-//	printf("rtmp: recv: %zu/%zu @ %zu\n", chunk_sz,
-//		(pkt->p_cur + pkt->p_left) - pkt->p_buf,
-//		(pkt->p_cur - pkt->p_buf));
+	dprintf("rtmp: recv: %zu/%zu @ %zu\n", chunk_sz,
+		(pkt->p_cur + pkt->p_left) - pkt->p_buf,
+		(pkt->p_cur - pkt->p_buf));
 
 	if ( !pkt->p_left ) {
 		if ( nsz < 12 ) {
@@ -465,7 +465,7 @@ static ssize_t decode_rtmp(struct _rtmp *r, const uint8_t *buf, size_t sz)
 		free(pkt->p_buf);
 		pkt->p_buf = NULL;
 	}else{
-		//printf(" Fragment %zu left to go:\n", pkt->p_left);
+		dprintf(" Fragment %zu left to go:\n", pkt->p_left);
 		//hex_dump(ptr, chunk_sz, 16);
 	}
 
@@ -488,8 +488,10 @@ int rtmp_invoke(rtmp_t r, int chan, uint32_t dest, invoke_t inv)
 
 	ret = rtmp_send(r, chan, dest, 1, RTMP_MSG_INVOKE, buf, sz);
 	free(buf);
-	printf("rtmp: sent invoke:\n");
+	dprintf("rtmp: sent invoke:\n");
+#if WMDUMP_DEBUG 
 	amf_invoke_pretty_print(inv);
+#endif
 	return ret;
 }
 
@@ -572,7 +574,7 @@ static int fill_rcv_buf(struct _rtmp *r)
 	if ( ret == 0 )
 		return transition(r, STATE_CONN_RESET);
 
-	//printf("rtmp: received %zu bytes\n", ret);
+	dprintf("rtmp: received %zu bytes\n", ret);
 	//hex_dump(r->r_cur, ret, 16);
 	r->r_cur += ret;
 	r->r_space -= ret;

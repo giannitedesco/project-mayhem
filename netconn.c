@@ -70,7 +70,7 @@ static int n_result(netconn_t nc, invoke_t inv)
 
 	if ( amf_invoke_nargs(inv) < 4 ) {
 		printf("netconn: too few args in result\n");
-		return -0;
+		return 0;
 	}
 
 	o_rc = amf_invoke_get(inv, 1);
@@ -79,11 +79,11 @@ static int n_result(netconn_t nc, invoke_t inv)
 
 	if ( amf_type(o_rc) != AMF_NUMBER ) {
 		printf("netconn: wrong type for result code\n");
-		return -1;
+		return 0;
 	}
 	if ( amf_type(o_stat) != AMF_OBJECT ) {
 		printf("netconn: wrong type for result object\n");
-		return -1;
+		return 0;
 	}
 
 	res.rc = amf_get_number(o_rc);
@@ -91,21 +91,21 @@ static int n_result(netconn_t nc, invoke_t inv)
 	o_str = amf_object_get(o_stat, "level");
 	if ( NULL == o_str || amf_type(o_str) != AMF_STRING ) {
 		printf("netconn: bad 'level' in _result\n");
-		return -1;
+		return 0;
 	}
 	res.level = amf_get_string(o_str);
 
 	o_str = amf_object_get(o_stat, "code");
 	if ( NULL == o_str || amf_type(o_str) != AMF_STRING ) {
 		printf("netconn: bad 'code' in _result\n");
-		return -1;
+		return 0;
 	}
 	res.code = amf_get_string(o_str);
 
 	o_str = amf_object_get(o_stat, "description");
 	if ( NULL == o_str || amf_type(o_str) != AMF_STRING ) {
 		printf("netconn: bad 'desc' in _result\n");
-		return -1;
+		return 0;
 	}
 	res.desc = amf_get_string(o_str);
 
@@ -131,6 +131,7 @@ static int dispatch(netconn_t nc, invoke_t inv, const char *method)
 	}
 	return 0;
 }
+
 int netconn_invoke(netconn_t nc, invoke_t inv)
 {
 	unsigned int nargs;

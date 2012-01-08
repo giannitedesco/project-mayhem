@@ -2,6 +2,7 @@
  * Copyright (c) 2011 Gianni Tedesco
  * Released under the terms of GPLv3
 */
+
 #ifndef _WMDUMP_MAYHEM_H
 #define _WMDUMP_MAYHEM_H
 
