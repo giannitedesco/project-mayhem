@@ -363,15 +363,15 @@ static uint64_t double_to_be64(double fp)
 	return htobe64(u.integral);
 }
 
-static uint64_t be64_to_double(double fp)
+static double be64_to_double(uint64_t integral)
 {
 	union {
 		double fp;
 		uint64_t integral;
 	}u;
-
-	u.fp = fp;
-	return be64toh(u.integral);
+	u.fp = 0.0; /* shutup gcc, i know its skanky */
+	u.integral = be64toh(u.integral);
+	return u.fp;
 }
 
 static size_t amf_to_buf(struct _amf *a, uint8_t *buf)
