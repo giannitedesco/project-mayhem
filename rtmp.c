@@ -299,6 +299,10 @@ static int r_invoke(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 	dprintf("rtmp: invoke: chan=0x%x dest=0x%x\n", chan, dest);
 	if ( r->i_dispatch ) {
 		ret = (*r->i_dispatch)(r->i_priv, inv);
+		if ( !ret ) {
+			printf("rtmp: received: bad INVOKE\n");
+			amf_invoke_pretty_print(inv);
+		}
 	}else{
 		printf("rtmp: received: unhandled INVOKE\n");
 		amf_invoke_pretty_print(inv);

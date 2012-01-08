@@ -19,30 +19,106 @@ struct _mayhem {
 	netconn_t nc;
 };
 
+struct naiad_room {
+	unsigned int flags;
+	const char *topic;
+};
+
+static int NaiadAuthorize(mayhem_t m, int code,
+				const char *nick,
+				const char *bitch,
+				unsigned int sid,
+				struct naiad_room *room)
+{
+	printf("NaiadAuthorize: code = %u\n", code);
+	printf(" your nickname: %s\n", nick);
+	printf(" performer: %s\n", bitch);
+	printf(" room flags: %d (0x%x)\n", room->flags, room->flags);
+	printf(" topic is: %s\n", (room->topic) ? room->topic : "");
+	return 1;
+}
+
 static int NaiadFreeze(mayhem_t m, int code, void *u1, int u2, const char *desc)
 {
 	printf("NaiadFreeze: %d: %s\n", code, desc);
 	return 1;
 }
 
+static int i_auth(mayhem_t m, invoke_t inv)
+{
+	amf_t o_rc, o_nick, o_bitch, o_sid, o_room;
+	amf_t o_topic, o_flags;
+	struct naiad_room room;
+
+	if ( amf_invoke_nargs(inv) < 26 ) {
+		printf("mayhem: too few args in NaiadAuthorize\n");
+		return 0;
+	}
+
+	o_rc = amf_invoke_get(inv, 1);
+	o_nick = amf_invoke_get(inv, 6);
+	o_bitch = amf_invoke_get(inv, 7);
+	o_sid = amf_invoke_get(inv, 12);
+	o_room = amf_invoke_get(inv, 25);
+
+	if ( amf_type(o_rc) != AMF_NUMBER ||
+			amf_type(o_nick) != AMF_STRING ||
+			amf_type(o_bitch) != AMF_STRING ||
+			amf_type(o_sid) != AMF_STRING ||
+			amf_type(o_room) != AMF_OBJECT ) {
+		printf("mayhem: type mismatch in NaiadAuthorize args\n");
+		return 0;
+	}
+	
+	o_flags = amf_object_get(o_room, "flags");
+	o_topic = amf_object_get(o_room, "roomtopic");
+	if ( NULL == o_flags ||
+			NULL == o_topic ||
+			amf_type(o_flags) != AMF_NUMBER ) {
+		printf("mayhem: Attribs not found in NaiadAuthorize room\n");
+		return 0;
+	}
+
+	room.flags = amf_get_number(o_flags);
+	switch(amf_type(o_topic)) {
+	case AMF_STRING:
+		room.topic = amf_get_string(o_topic);
+		break;
+	case AMF_NULL:
+		room.topic = NULL;
+		break;
+	default:
+		printf("mayhem: bad type for roomtopic\n");
+		return 0;
+	}
+
+	return NaiadAuthorize(m,
+				amf_get_number(o_rc),
+				amf_get_string(o_nick),
+				amf_get_string(o_bitch),
+				atoi(amf_get_string(o_sid)),
+				&room);
+}
+
+
 static int i_freeze(mayhem_t m, invoke_t inv)
 {
-	amf_t f_rc, f_desc;
+	amf_t o_rc, o_desc;
 	if ( amf_invoke_nargs(inv) < 5 ) {
 		printf("mayhem: too few args in NaiadFreeze\n");
 		return 0;
 	}
 
-	f_rc = amf_invoke_get(inv, 1);
-	f_desc = amf_invoke_get(inv, 4);
+	o_rc = amf_invoke_get(inv, 1);
+	o_desc = amf_invoke_get(inv, 4);
 
-	if ( amf_type(f_rc) != AMF_NUMBER || amf_type(f_desc) != AMF_STRING ) {
+	if ( amf_type(o_rc) != AMF_NUMBER || amf_type(o_desc) != AMF_STRING ) {
 		printf("mayhem: type mismatch in NaiadFreeze args\n");
 		return 0;
 	}
 
-	return NaiadFreeze(m, amf_get_number(f_rc),
-				NULL, -1, amf_get_string(f_desc));
+	return NaiadFreeze(m, amf_get_number(o_rc),
+				NULL, -1, amf_get_string(o_desc));
 }
 
 static int naiad_dispatch(mayhem_t m, invoke_t inv, const char *method)
@@ -52,6 +128,7 @@ static int naiad_dispatch(mayhem_t m, invoke_t inv, const char *method)
 		int (*call)(mayhem_t m, invoke_t inv);
 	}tbl[] = {
 		{.method = "NaiadFreeze", .call = i_freeze},
+		{.method = "NaiadAuthorized", .call = i_auth},
 	};
 	unsigned int i;
 
