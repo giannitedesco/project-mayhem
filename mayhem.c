@@ -18,6 +18,7 @@
 #define MAYHEM_STATE_CONNECTING		1
 #define MAYHEM_STATE_FROZEN		2
 #define MAYHEM_STATE_AUTHORIZED		3
+#define MAYHEM_STATE_GOT_STREAM		4
 
 struct _mayhem {
 	unsigned int state;
@@ -183,15 +184,21 @@ static int dispatch(void *priv, invoke_t inv)
 	ret = netconn_invoke(m->nc, inv);
 	if ( ret < 0 )
 		return 0;
-	if ( ret )
-		return 1;
+	if ( !ret )
+		return 0; /* unhandled */
 
 	/* TODO: We may need to handle netconn status and reflect it
 	 * in overall application state
 	*/
+	switch(netconn_state(m->nc)) {
+	case NETCONN_STATE_CREATED:
+		m->state = MAYHEM_STATE_GOT_STREAM;
+		break;
+	default:
+		break;
+	}
 
-	/* unhandled */
-	return 0;
+	return 1;
 }
 
 static int invoke_connect(struct _mayhem *m, struct _wmvars *v)
@@ -211,9 +218,12 @@ out:
 	return ret;
 }
 
-static int create_stream(struct _mayhem *m, double num)
+static int authorized(struct _mayhem *m, double num)
 {
-	return netconn_createstream(m->nc, 2.0);
+	if (netconn_state(m->nc) == NETCONN_STATE_CONNECTED) {
+		return netconn_createstream(m->nc, 2.0);
+	}
+	return 1;
 }
 
 void mayhem_close(mayhem_t m)
@@ -255,8 +265,10 @@ mayhem_t mayhem_connect(wmvars_t vars)
 			mayhem_abort(m);
 			break;
 		case MAYHEM_STATE_AUTHORIZED:
-			printf("mayhem: giggity giggity!\n");
-			create_stream(m, 2.0);
+			authorized(m, 2.0);
+			break;
+		case MAYHEM_STATE_GOT_STREAM:
+			printf("Time, to play\n");
 			break;
 		default:
 			printf("ugh? %d\n", m->state);

@@ -41,7 +41,9 @@ struct _rtmp {
 	size_t r_space;
 	unsigned int state;
 	uint32_t server_bw;
+	uint32_t client_bw;
 	os_sock_t sock;
+	uint8_t client_bw2;
 
 	struct rtmp_chan chan[RTMP_MAX_CHANNELS];
 };
@@ -187,6 +189,23 @@ static int rtmp_send(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 	return 1;
 }
 
+#if 0
+static int send_client_bw(struct _rtmp *r)
+{
+	uint8_t buf[5];
+	encode_int32(buf, r->client_bw);
+	buf[3] = r->client_bw2;
+	return rtmp_send(r, 2, 0, 0, RTMP_MSG_CLIENT_BW, buf, sizeof(buf));
+}
+#endif
+
+static int send_server_bw(struct _rtmp *r)
+{
+	uint8_t buf[4];
+	encode_int32(buf, r->server_bw);
+	return rtmp_send(r, 2, 0, 0xfe227, RTMP_MSG_SERVER_BW, buf, sizeof(buf));
+}
+
 static int send_ctl(struct _rtmp *r, uint16_t type, uint32_t val, uint32_t ts)
 {
 	uint8_t buf[6];
@@ -194,7 +213,7 @@ static int send_ctl(struct _rtmp *r, uint16_t type, uint32_t val, uint32_t ts)
 
 	encode_int16(ptr, type), ptr += 2;
 	encode_int32(ptr, val), ptr += 4;
-	return rtmp_send(r, 3, 0, ts, RTMP_MSG_CTL, buf, ptr - buf);
+	return rtmp_send(r, 2, 0, ts, RTMP_MSG_CTL, buf, ptr - buf);
 }
 
 static size_t current_buf_sz(struct _rtmp *r)
@@ -352,10 +371,10 @@ static int r_ctl(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 		if ( sz < sizeof(echo) )
 			return 0;
 		echo = decode_int32(buf);
-		return send_ctl(r, RTMP_CTL_PONG, echo, 0);
+		return send_ctl(r, RTMP_CTL_PONG, echo, 0xfe227);
 	case RTMP_CTL_PONG:
 	default:
-		printf("rtmp: CTL of nknown type %d (0x%x)\n", type, type);
+		printf("rtmp: CTL of unknown type %d (0x%x)\n", type, type);
 		hex_dump(buf, sz, 16);
 		break;
 	}
@@ -371,13 +390,20 @@ static int r_server_bw(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 		return 0;
 
 	r->server_bw = decode_int32(buf);
-	return 1;
+	return send_server_bw(r);
 }
 
 static int r_client_bw(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 			 const uint8_t *buf, size_t sz)
 {
 	dprintf("rtmp: received: CLIENT_BW\n");
+	if ( sz < sizeof(uint32_t) )
+		return 0;
+
+	r->client_bw = decode_int32(buf);
+	if ( sz > sizeof(uint32_t) )
+		r->client_bw2 = buf[4];
+
 	return 1;
 }
 
@@ -525,16 +551,34 @@ static int do_invoke(rtmp_t r, int chan, uint32_t dest,
 {
 	uint8_t *buf;
 	size_t sz;
+	size_t hsz;
 	int ret;
 
+	switch(type) {
+	case RTMP_MSG_FLEX_MESSAGE:
+		hsz = 1;
+		break;
+	default:
+		hsz = 0;
+		break;
+	}
 	sz = amf_invoke_buf_size(inv);
-	buf = malloc(sz);
+	buf = malloc(sz + hsz);
 	if ( NULL == buf )
 		return 0;
 
-	amf_invoke_to_buf(inv, buf);
+	amf_invoke_to_buf(inv, buf + hsz);
 
-	ret = rtmp_send(r, chan, dest, 1, type, buf, sz);
+	/* prepend header */
+	switch(type) {
+	case RTMP_MSG_FLEX_MESSAGE:
+		buf[0] = 0;
+		break;
+	default:
+		break;
+	}
+
+	ret = rtmp_send(r, chan, dest, (type == RTMP_MSG_FLEX_MESSAGE) ? 0x1191 : 1, type, buf, sz + hsz);
 	free(buf);
 	dprintf("rtmp: sent invoke:\n");
 #if WMDUMP_DEBUG 

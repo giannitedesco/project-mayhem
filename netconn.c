@@ -14,15 +14,9 @@
 struct _netconn {
 	rtmp_t rtmp;
 	unsigned int state;
+	unsigned int stream_id;
 	int chan;
 	uint32_t dest;
-};
-
-struct nc_result {
-	unsigned int rc;
-	const char *level;
-	const char *code;
-	const char *desc;
 };
 
 static invoke_t createstream(double num)
@@ -88,23 +82,12 @@ out:
 	return nc;
 }
 
-static int handle_result(netconn_t nc, struct nc_result *res)
+static int connect_result(netconn_t nc, invoke_t inv)
 {
-	printf("NetConnection: result:\n");
-	printf(" rc = %d\n", res->rc);
-	printf(" level = %s\n", res->level);
-	printf(" code = %s\n", res->code);
-	printf(" desc = %s\n", res->desc);
-	if ( !strcmp(res->code, "NetConnection.Connect.Success") ) {
-		nc->state = NETCONN_STATE_CONNECTED;
-	}
-	printf("\n");
-	return 1;
-}
-
-static int n_result(netconn_t nc, invoke_t inv)
-{
-	struct nc_result res = {0};
+	unsigned int rc;
+	const char *level;
+	const char *code;
+	const char *desc;
 	amf_t o_rc, o_stat;
 	amf_t o_str;
 
@@ -126,30 +109,76 @@ static int n_result(netconn_t nc, invoke_t inv)
 		return 0;
 	}
 
-	res.rc = amf_get_number(o_rc);
+	rc = amf_get_number(o_rc);
 
 	o_str = amf_object_get(o_stat, "level");
 	if ( NULL == o_str || amf_type(o_str) != AMF_STRING ) {
 		printf("netconn: bad 'level' in _result\n");
 		return 0;
 	}
-	res.level = amf_get_string(o_str);
+	level = amf_get_string(o_str);
 
 	o_str = amf_object_get(o_stat, "code");
 	if ( NULL == o_str || amf_type(o_str) != AMF_STRING ) {
 		printf("netconn: bad 'code' in _result\n");
 		return 0;
 	}
-	res.code = amf_get_string(o_str);
+	code = amf_get_string(o_str);
 
 	o_str = amf_object_get(o_stat, "description");
 	if ( NULL == o_str || amf_type(o_str) != AMF_STRING ) {
 		printf("netconn: bad 'desc' in _result\n");
 		return 0;
 	}
-	res.desc = amf_get_string(o_str);
+	desc = amf_get_string(o_str);
 
-	return handle_result(nc, &res);
+	printf("NetConnection: result:\n");
+	printf(" rc = %d\n", rc);
+	printf(" level = %s\n", level);
+	printf(" code = %s\n", code);
+	printf(" desc = %s\n", desc);
+
+	if ( !strcmp(code, "NetConnection.Connect.Success") ) {
+		nc->state = NETCONN_STATE_CONNECTED;
+	}
+
+	return 1;
+}
+
+static int create_result(netconn_t nc, invoke_t inv)
+{
+	amf_t o_rc, o_sid;
+
+	if ( amf_invoke_nargs(inv) < 4 ) {
+		printf("netconn: too few args in result\n");
+		return 0;
+	}
+	o_rc = amf_invoke_get(inv, 1);
+	/* arg[2] is null? */
+	o_sid = amf_invoke_get(inv, 3);
+
+	if ( amf_type(o_rc) != AMF_NUMBER || amf_type(o_sid) != AMF_NUMBER ) {
+		printf("netconn: create stream result: type mismatch\n");
+		return 0;
+	}
+
+	nc->stream_id = amf_get_number(o_sid);
+	printf("netconn: Stream created (%f) with id: %d\n",
+		amf_get_number(o_rc), nc->stream_id);
+	nc->state = NETCONN_STATE_CREATED;
+	return 1;
+}
+
+static int n_result(netconn_t nc, invoke_t inv)
+{
+	switch(nc->state) {
+	case NETCONN_STATE_CONNECT_SENT:
+		return connect_result(nc, inv);
+	case NETCONN_STATE_CREATE_SENT:
+		return create_result(nc, inv);
+	default:
+		return 0;
+	}
 }
 
 static int dispatch(netconn_t nc, invoke_t inv, const char *method)
