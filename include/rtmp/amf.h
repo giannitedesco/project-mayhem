@@ -19,6 +19,7 @@ typedef struct _amf *amf_t;
 amf_t amf_number(double num);
 amf_t amf_bool(uint8_t val);
 amf_t amf_string(const char *str);
+__attribute__((format(printf,1,2))) amf_t amf_stringf(const char *fmt, ...);
 amf_t amf_null(void);
 amf_t amf_undefined(void);
 

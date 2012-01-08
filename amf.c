@@ -5,8 +5,11 @@
 #include <wmdump.h>
 #include <os.h>
 #include <rtmp/amf.h>
+#include <endian.h>
 
 #include "amfbuf.h"
+
+#include <stdarg.h>
 
 struct amf_elem {
 	char *key;
@@ -81,6 +84,37 @@ amf_t amf_string(const char *str)
 		return NULL;
 	}
 
+	return a;
+}
+
+amf_t amf_stringf(const char *fmt, ...)
+{
+	struct _amf *a;
+	va_list va;
+	int len;
+	char *buf;
+
+	/* size the buffer */
+	va_start(va, fmt);
+	len = vsnprintf(NULL, 0, fmt, va);
+	if ( len <= 0 )
+		return amf_string(NULL);
+	va_end(va);
+
+	/* create the string */
+	buf = malloc(len + 1);
+	if ( buf == NULL )
+		return NULL;
+	va_start(va, fmt);
+	vsnprintf(buf, len + 1, fmt, va);
+	va_end(va);
+
+	/* return the object */
+	a = amf_alloc(AMF_STRING);
+	if ( NULL == a )
+		return NULL;
+
+	a->u.str = buf;
 	return a;
 }
 
@@ -178,6 +212,7 @@ void amf_free(amf_t a)
 				free(a->u.obj.elem[i].key);
 				amf_free(a->u.obj.elem[i].val);
 			}
+			free(a->u.obj.elem);
 		default:
 			break;
 		}
@@ -290,6 +325,17 @@ size_t amf_invoke_buf_size(invoke_t inv)
 	return ret;
 }
 
+static uint64_t double_to_be64(double fp)
+{
+	union {
+		double fp;
+		uint64_t integral;
+	}u;
+
+	u.fp = fp;
+	return htobe64(u.integral);
+}
+
 static size_t amf_to_buf(struct _amf *a, uint8_t *buf)
 {
 	uint8_t *ptr = buf;
@@ -300,7 +346,7 @@ static size_t amf_to_buf(struct _amf *a, uint8_t *buf)
 
 	switch(a->type) {
 	case AMF_NUMBER:
-		memset(ptr, 0, sizeof(double));
+		*(uint64_t *)ptr = double_to_be64(a->u.num);
 		ptr += sizeof(double);
 		break;
 	case AMF_BOOLEAN:

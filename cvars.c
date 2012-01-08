@@ -146,8 +146,8 @@ static int do_line(struct _wmvars *v, uint8_t *str)
 
 		/* strings */
 		{.name = "turbo", .handler = turbo},
-		{.name = "signupargs", .handler = signupargs},
-		{.name = "sessiontype", .handler = sessiontype},
+		{.name = "p_signupargs", .handler = signupargs},
+		{.name = "sessionType", .handler = sessiontype},
 		{.name = "p_nickname", .handler = p_nickname},
 		{.name = "p_sakey", .handler = p_sakey},
 		{.name = "p_g", .handler = p_g},
