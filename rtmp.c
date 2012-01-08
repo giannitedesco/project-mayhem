@@ -89,6 +89,12 @@ static size_t encode_chan(uint8_t *buf, uint8_t htype, int chan)
 	}
 }
 
+static void encode_int16(uint8_t *buf, uint16_t val)
+{
+	buf[0] = (val >> 8) & 0xff;
+	buf[1] = val & 0xff;
+}
+
 static void encode_int24(uint8_t *buf, uint32_t val)
 {
 	buf[0] = (val >> 16) & 0xff;
@@ -102,6 +108,11 @@ static void encode_int32(uint8_t *buf, uint32_t val)
 	buf[1] = (val >> 16) & 0xff;
 	buf[2] = (val >> 8) & 0xff;
 	buf[3] = val & 0xff;
+}
+
+static uint16_t decode_int16(const uint8_t *ptr)
+{
+	return (ptr[0] << 8) | ptr[1];
 }
 
 static uint32_t decode_int24(const uint8_t *ptr)
@@ -174,6 +185,16 @@ static int rtmp_send(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 	}
 
 	return 1;
+}
+
+static int send_ctl(struct _rtmp *r, uint16_t type, uint32_t val, uint32_t ts)
+{
+	uint8_t buf[6];
+	uint8_t *ptr = buf;
+
+	encode_int16(ptr, type), ptr += 2;
+	encode_int32(ptr, val), ptr += 4;
+	return rtmp_send(r, 3, 0, ts, RTMP_MSG_CTL, buf, ptr - buf);
 }
 
 static size_t current_buf_sz(struct _rtmp *r)
@@ -313,10 +334,32 @@ out:
 	return 1;
 }
 
-static int r_ping(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
+static int r_ctl(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 			 const uint8_t *buf, size_t sz)
 {
-	dprintf("rtmp: received: CLIENT_BW\n");
+	uint16_t type;
+	uint32_t echo;
+
+	if ( sz < sizeof(type) )
+		return 0;
+	type = decode_int16(buf);
+	buf += sizeof(type);
+	sz -= sizeof(type);
+
+	switch(type) {
+	case RTMP_CTL_PING:
+		printf("rtmp: PING\n");
+		if ( sz < sizeof(echo) )
+			return 0;
+		echo = decode_int32(buf);
+		return send_ctl(r, RTMP_CTL_PONG, echo, 0);
+	case RTMP_CTL_PONG:
+	default:
+		printf("rtmp: CTL of nknown type %d (0x%x)\n", type, type);
+		hex_dump(buf, sz, 16);
+		break;
+	}
+
 	return 1;
 }
 
@@ -355,7 +398,7 @@ static int rtmp_dispatch(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 {
 	rmsg_t tbl[] = {
 		[RTMP_MSG_CHUNK_SZ] r_chunksz,
-		[RTMP_MSG_PING] r_ping,
+		[RTMP_MSG_CTL] r_ctl,
 		[RTMP_MSG_SERVER_BW] r_server_bw,
 		[RTMP_MSG_CLIENT_BW] r_client_bw,
 		[RTMP_MSG_INVOKE] r_invoke,
