@@ -1,4 +1,5 @@
 #include <wmdump.h>
+#include <ctype.h>
 
 void hex_dumpf(FILE *f, const uint8_t *tmp, size_t len, size_t llen)
 {

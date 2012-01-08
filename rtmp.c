@@ -4,10 +4,15 @@
 */
 #include <wmdump.h>
 #include <os.h>
+#include <rtmp/amf.h>
 #include <rtmp/rtmp.h>
 #include <rtmp/proto.h>
 
-#include "handshake.h"
+#include <unistd.h>
+#include <sys/types.h>
+#include <time.h>
+
+#include "amfbuf.h"
 
 #define STATE_INIT		0
 #define STATE_ABORT		1
@@ -40,6 +45,106 @@ static int rtmp_send_raw(struct _rtmp *r, const uint8_t *buf, size_t len)
 			return transition(r, STATE_CONN_RESET);
 
 		buf += ret;
+	}
+
+	return 1;
+}
+
+static size_t encode_chan(uint8_t *buf, uint8_t htype, int chan)
+{
+	assert(chan >= 0);
+	assert(htype < 4);
+
+	/* and jesus wept */
+	if ( chan < 64 ) {
+		buf[0] = (htype << 6) | chan;
+		return 1;
+	}else if ( chan < 0xff + 64 ) {
+		buf[0] = (htype << 6);
+		buf[1] = chan - 64;
+		return 2;
+	}else if ( chan < 0xffff + 64 ) {
+		buf[0] = (htype << 6) | 1;
+		buf[1] = (chan - 64) & 0xff;
+		buf[2] = ((chan - 64) >> 8) & 0xff;
+		return 3;
+	}else{
+		abort();
+	}
+}
+
+static void encode_int24(uint8_t *buf, uint32_t val)
+{
+	buf[0] = (val >> 16) & 0xff;
+	buf[1] = (val >> 8) & 0xff;
+	buf[2] = val & 0xff;
+}
+
+static void encode_int32(uint8_t *buf, uint32_t val)
+{
+	buf[0] = (val >> 24) & 0xff;
+	buf[1] = (val >> 16) & 0xff;
+	buf[2] = (val >> 8) & 0xff;
+	buf[3] = val & 0xff;
+}
+
+static size_t hdr_full(uint8_t *buf, int chan, uint32_t dest, uint32_t ts,
+			uint8_t type, size_t len)
+{
+	uint8_t *ptr = buf;
+
+	ptr += encode_chan(ptr, 0, chan);
+
+	if ( ts >= (1 << 24) ) {
+		encode_int24(ptr, 0xffffff), ptr += 3;
+	}else{
+		encode_int24(ptr, ts), ptr += 3;
+	}
+
+	encode_int24(ptr, len), ptr += 3;
+
+	*ptr = type;
+	ptr++;
+
+	encode_int32(ptr, dest), ptr += 4;
+
+	if ( ts >= (1 << 24) ) {
+		encode_int32(buf, ts), ptr += 4;
+	}
+
+	return ptr - buf;
+}
+
+static size_t hdr_small(uint8_t *buf, int chan, uint32_t dest, uint32_t ts,
+			uint8_t type, size_t len)
+{
+	return encode_chan(buf, 3, chan);
+}
+
+static int rtmp_send(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
+			uint8_t type, const uint8_t *pkt, size_t len)
+{
+	uint8_t buf[RTMP_HDR_MAX_SZ + r->chunk_sz];
+	unsigned int i;
+
+	for(i = 0; len; i++) {
+		size_t this_sz;
+		size_t hdr_sz;
+
+		if ( i )
+			hdr_sz = hdr_small(buf, chan, dest, ts, type, len);
+		else
+			hdr_sz = hdr_full(buf, chan, dest, ts, type, len);
+
+		this_sz = (len <= r->chunk_sz) ? len : r->chunk_sz;
+
+		memcpy(buf + hdr_sz, pkt, this_sz);
+
+		if ( !rtmp_send_raw(r, buf, hdr_sz + this_sz) )
+			return 0;
+
+		pkt += this_sz;
+		len -= this_sz;
 	}
 
 	return 1;
@@ -90,13 +195,23 @@ static int rbuf_request_size(struct _rtmp *r, size_t sz)
 static int handshake1(struct _rtmp *r)
 {
 	uint8_t buf[RTMP_HANDSHAKE_LEN + 1];
+	unsigned int i;
 
 	/* make space for the response */
 	if ( !rbuf_request_size(r, RTMP_HANDSHAKE_LEN * 2 + 1) )
 		return 0;
 
+	srand(time(NULL) ^ getpid());
+
 	buf[0] = 3;
-	memcpy(buf + 1, rtmp_handshake, RTMP_HANDSHAKE_LEN);
+
+	for(i = 1; i < sizeof(buf); i++)
+		buf[i] = rand();
+
+	buf[5] = 0x00;
+	buf[6] = 0x00;
+	buf[7] = 0x07;
+	buf[7] = 0x02;
 
 	if ( !rtmp_send_raw(r, buf, sizeof(buf)) )
 		return 0;
@@ -118,8 +233,8 @@ static int handshake1_resp(struct _rtmp *r, const uint8_t *buf, size_t len)
 
 static int handshake2(struct _rtmp *r)
 {
-	/* XXX: Rely on handhsake1 response still being sat in buffer */
-	if ( !rtmp_send_raw(r, r->r_buf + RTMP_HANDSHAKE_LEN + 1,
+	/* XXX: We rely on handhsake1 response still being sat in buffer */
+	if ( !rtmp_send_raw(r, r->r_buf + 1,
 				RTMP_HANDSHAKE_LEN) )
 		return 0;
 
@@ -129,6 +244,24 @@ static int handshake2(struct _rtmp *r)
 
 	printf("rtmp: sent handshake 2\n");
 	return 1;
+}
+
+int rtmp_invoke(rtmp_t r, invoke_t inv)
+{
+	uint8_t *buf;
+	size_t sz;
+	int ret;
+
+	sz = amf_invoke_buf_size(inv);
+	buf = malloc(sz);
+	if ( NULL == buf )
+		return 0;
+
+	amf_invoke_to_buf(inv, buf);
+
+	ret = rtmp_send(r, 3, 0, 1, RTMP_MSG_INVOKE, buf, sz);
+	free(buf);
+	return ret;
 }
 
 static char *urlparse(const char *url, uint16_t *port)
@@ -191,7 +324,9 @@ static ssize_t rtmp_drain_buf(struct _rtmp *r)
 		ret = handshake1_resp(r, buf, sz);
 		break;
 	default:
-		abort();
+		hex_dump(buf, sz, 16);
+		return sz;
+		//abort();
 	}
 
 	return ret;
@@ -213,7 +348,7 @@ static int fill_rcv_buf(struct _rtmp *r)
 	return 1;
 }
 
-static int rtmp_pump(struct _rtmp *r)
+int rtmp_pump(rtmp_t r)
 {
 	ssize_t taken;
 
@@ -266,6 +401,7 @@ rtmp_t rtmp_connect(const char *tcUrl)
 
 	printf("rtmp: Connecting to: %s:%d\n", name, port);
 	r->sock = sock_connect(name, port);
+	//r->sock = sock_connect("127.0.0.1", port);
 	free(name);
 	if ( BAD_SOCKET == r->sock )
 		goto out_free;
@@ -274,7 +410,6 @@ rtmp_t rtmp_connect(const char *tcUrl)
 		goto out_close;
 
 	while ( r->state != STATE_CONNECTED ) {
-		printf("state is %d\n", r->state);
 		if ( !rtmp_pump(r) )
 			goto out_close;
 	}

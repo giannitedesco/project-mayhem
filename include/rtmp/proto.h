@@ -8,4 +8,6 @@
 #define RTMP_HANDSHAKE_LEN		1536
 #define RTMP_DEFAULT_CHUNK_SZ		128
 
+#define RTMP_HDR_MAX_SZ			14
+
 #endif /* _RTMP_PROTO_H */

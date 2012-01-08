@@ -7,11 +7,10 @@
 #include <mayhem.h>
 #include <os.h>
 
-#include <rtmp/rtmp.h>
 #include <rtmp/amf.h>
+#include <rtmp/rtmp.h>
 
 #include "cvars.h"
-#include "amfbuf.h"
 
 #define SWF_URL "http://www.naiadsystems.com/flash/generic/20111122/avchat.swf"
 
@@ -19,10 +18,11 @@ struct _mayhem {
 	rtmp_t rtmp;
 };
 
-static int i_connect(struct _mayhem *m, struct _wmvars *v)
+static int invoke_connect(struct _mayhem *m, struct _wmvars *v)
 {
 	invoke_t inv;
 	amf_t obj;
+	int ret;
 
 	inv = amf_invoke_new(7);
 	if ( NULL == inv )
@@ -101,8 +101,9 @@ static int i_connect(struct _mayhem *m, struct _wmvars *v)
 	if ( !amf_invoke_append(inv, obj) )
 		goto err;
 
+	ret = rtmp_invoke(m->rtmp, inv);
 	amf_invoke_free(inv);
-	return 1;
+	return ret;
 err_obj:
 	amf_free(obj);
 err:
@@ -126,13 +127,15 @@ mayhem_t mayhem_connect(wmvars_t vars)
 	if ( NULL == m )
 		goto out;
 
-#if 0
 	m->rtmp = rtmp_connect(vars->tcUrl);
 	if ( NULL == m->rtmp )
 		goto out_free;
-#endif
-	if ( !i_connect(m, vars) )
+
+	if ( !invoke_connect(m, vars) )
 		goto out_free;
+
+	while ( rtmp_pump(m->rtmp) )
+		/* do nothing */;
 
 	/* success */
 	goto out;
