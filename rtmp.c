@@ -21,13 +21,27 @@
 #define STATE_HANDSHAKE_2	4
 #define STATE_CONNECTED		4 /* equivalent to handshake_2 */
 
+struct rtmp_chan {
+	uint8_t *p_buf;
+	uint8_t *p_cur;
+	size_t p_left;
+
+	uint32_t ts;
+	uint32_t sz;
+	uint32_t dest;
+	uint8_t type;
+};
+
 struct _rtmp {
-	unsigned int state;
 	size_t chunk_sz;
+	size_t r_space;
+	unsigned int state;
+	uint32_t server_bw;
 	uint8_t *r_buf;
 	uint8_t *r_cur;
-	size_t r_space;
 	os_sock_t sock;
+
+	struct rtmp_chan chan[RTMP_MAX_CHANNELS];
 };
 
 static int transition(struct _rtmp *r, unsigned int state);
@@ -86,6 +100,16 @@ static void encode_int32(uint8_t *buf, uint32_t val)
 	buf[1] = (val >> 16) & 0xff;
 	buf[2] = (val >> 8) & 0xff;
 	buf[3] = val & 0xff;
+}
+
+static uint32_t decode_int24(const uint8_t *ptr)
+{
+	return (ptr[0] << 16) | (ptr[1] << 8) | ptr[2];
+}
+
+static uint32_t decode_int32(const uint8_t *ptr)
+{
+	return (ptr[0] << 24) | (ptr[1] << 16) | (ptr[2] << 8) | ptr[3];
 }
 
 static size_t hdr_full(uint8_t *buf, int chan, uint32_t dest, uint32_t ts,
@@ -163,13 +187,17 @@ static size_t current_buf_sz(struct _rtmp *r)
 static int rbuf_update_size(struct _rtmp *r)
 {
 	uint8_t *new;
+	size_t ofs;
 
-	printf("Change bufsz %zu\n", r->chunk_sz);
+	printf("rtmp: Change chunk size: %zu\n", r->chunk_sz);
 	new = realloc(r->r_buf, r->chunk_sz);
 	if ( NULL == new )
 		return transition(r, STATE_ABORT);
 
-	r->r_buf = r->r_cur = new;
+	ofs = r->r_cur - r->r_buf;
+
+	r->r_buf = new;
+	r->r_cur = new + ofs;
 	r->r_space = r->chunk_sz;
 	return 1;
 }
@@ -180,6 +208,10 @@ static int rbuf_update_size(struct _rtmp *r)
 */
 static int rbuf_request_size(struct _rtmp *r, size_t sz)
 {
+	/* paranoia */
+	if ( sz == 0 )
+		return transition(r, STATE_ABORT);
+
 	r->chunk_sz = sz;
 
 	if ( sz <= current_buf_sz(r) ) {
@@ -220,7 +252,7 @@ static int handshake1(struct _rtmp *r)
 	return 1;
 }
 
-static int handshake1_resp(struct _rtmp *r, const uint8_t *buf, size_t len)
+static ssize_t handshake1_resp(struct _rtmp *r, const uint8_t *buf, size_t len)
 {
 	if ( len < RTMP_HANDSHAKE_LEN * 2 + 1 )
 		return -1;
@@ -244,6 +276,168 @@ static int handshake2(struct _rtmp *r)
 
 	printf("rtmp: sent handshake 2\n");
 	return 1;
+}
+
+static int r_invoke(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
+			 const uint8_t *buf, size_t sz)
+{
+	invoke_t inv;
+
+	printf("rtmp: received: INVOKE\n");
+	inv = amf_invoke_from_buf(buf, sz);
+	if ( NULL == inv )
+		return 0;
+
+	amf_invoke_pretty_print(inv);
+	amf_invoke_free(inv);
+	return 1;
+}
+
+static int r_server_bw(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
+			 const uint8_t *buf, size_t sz)
+{
+	printf("rtmp: received: SERVER_BW\n");
+	if ( sz < sizeof(uint32_t) )
+		return 0;
+
+	r->server_bw = decode_int32(buf);
+	return 1;
+}
+
+static int r_chunksz(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
+			 const uint8_t *buf, size_t sz)
+{
+	if ( sz < sizeof(uint32_t) )
+		return 0;
+	rbuf_request_size(r, decode_int32(buf));
+	return 1;
+}
+
+typedef int (*rmsg_t)(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
+			 const uint8_t *buf, size_t sz);
+
+static int rtmp_dispatch(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
+			 uint8_t type, const uint8_t *buf, size_t sz)
+{
+	rmsg_t tbl[] = {
+		[RTMP_MSG_CHUNK_SZ] r_chunksz,
+		[RTMP_MSG_SERVER_BW] r_server_bw,
+		[RTMP_MSG_INVOKE] r_invoke,
+	};
+
+	if ( type >= ARRAY_SIZE(tbl) || NULL == tbl[type] ) {
+		printf(".id = %d (0x%x)\n", chan, chan);
+		printf(".dest = %d (0x%x)\n", dest, dest);
+		printf(".ts = %d (0x%x)\n", ts, ts);
+		printf(".sz = %zu\n", sz);
+		printf(".type = %d (0x%x)\n", type, type);
+		hex_dump(buf, sz, 16);
+		return 1;
+	}
+
+	return (*tbl[type])(r, chan, dest, ts, buf, sz);
+}
+
+/* sigh.. */
+static ssize_t decode_rtmp(struct _rtmp *r, const uint8_t *buf, size_t sz)
+{
+	static const size_t sizes[] = {12, 8, 4, 1};
+	struct rtmp_chan *pkt;
+	const uint8_t *ptr = buf, *end = buf + sz;
+	uint8_t type;
+	size_t nsz, chunk_sz;
+	int chan;
+	size_t cur_ts;
+
+	type = (*ptr & 0xc0) >> 6;
+	chan = (*ptr & 0x3f);
+	if ( (++ptr) > end )
+		return 0;
+
+	switch(chan) {
+	case 0:
+		chan = *ptr + 64;
+		ptr++;
+		break;
+	case 1:
+		chan = (ptr[1] << 8) + ptr[0] + 64;
+		ptr += 2;
+		break;
+	default:
+		break;
+	}
+
+	pkt = r->chan + chan;
+	nsz = sizes[type];
+
+	if ( nsz >= 4 ) {
+		cur_ts = decode_int24(ptr);
+		ptr += 3;
+	}else{
+		cur_ts = 0;
+	}
+
+	if ( nsz >= 8 ) {
+		pkt->sz = decode_int24(ptr);
+		ptr += 3;
+
+		pkt->type = ptr[0];
+		ptr++;
+	}
+
+	if ( nsz >= 12 ) {
+		pkt->dest = decode_int32(ptr);
+		ptr += 4;
+	}
+
+	if ( cur_ts == 0xffffff ) {
+		cur_ts = decode_int32(ptr);
+		ptr += 4;
+	}
+
+	if ( NULL == pkt->p_buf ) {
+		pkt->p_cur = pkt->p_buf = malloc(pkt->sz);
+		pkt->p_left = pkt->sz;
+	}
+
+	chunk_sz = (pkt->p_left < r->chunk_sz) ? 
+		pkt->p_left : r->chunk_sz;
+
+	if ( ptr + chunk_sz > end ) {
+		if ( pkt->p_cur == pkt->p_buf ) {
+			free(pkt->p_buf);
+			pkt->p_buf = NULL;
+		}
+
+		return 0;
+	}
+
+	memcpy(pkt->p_cur, ptr, chunk_sz);
+	pkt->p_cur += chunk_sz;
+	pkt->p_left -= chunk_sz;
+//	printf("%zu/%zu @ %zu\n", chunk_sz,
+//		(pkt->p_cur + pkt->p_left) - pkt->p_buf,
+//		(pkt->p_cur - pkt->p_buf));
+
+	if ( !pkt->p_left ) {
+		if ( nsz < 12 ) {
+			pkt->ts += cur_ts;
+		}else{
+			pkt->ts = cur_ts;
+		}
+
+		rtmp_dispatch(r, chan, pkt->dest, pkt->ts, pkt->type,
+				pkt->p_buf, pkt->p_cur - pkt->p_buf);
+
+		free(pkt->p_buf);
+		pkt->p_buf = NULL;
+	}else{
+		//printf(" Fragment %zu left to go:\n", pkt->p_left);
+		//hex_dump(ptr, chunk_sz, 16);
+	}
+
+	ptr += chunk_sz;
+	return (ptr - buf);
 }
 
 int rtmp_invoke(rtmp_t r, invoke_t inv)
@@ -323,10 +517,11 @@ static ssize_t rtmp_drain_buf(struct _rtmp *r)
 	case STATE_HANDSHAKE_1:
 		ret = handshake1_resp(r, buf, sz);
 		break;
-	default:
-		hex_dump(buf, sz, 16);
+	case STATE_CONNECTED:
+		ret = decode_rtmp(r, buf, sz);
 		return sz;
-		//abort();
+	default:
+		abort();
 	}
 
 	return ret;
@@ -343,7 +538,7 @@ static int fill_rcv_buf(struct _rtmp *r)
 
 	r->r_cur += ret;
 	r->r_space -= ret;
-	printf("rtmp: received %zu bytes\n", ret);
+//	printf("rtmp: received %zu bytes\n", ret);
 
 	return 1;
 }
@@ -410,8 +605,10 @@ rtmp_t rtmp_connect(const char *tcUrl)
 		goto out_close;
 
 	while ( r->state != STATE_CONNECTED ) {
-		if ( !rtmp_pump(r) )
-			goto out_close;
+		if ( !rtmp_pump(r) ) {
+			rtmp_close(r);
+			return NULL;
+		}
 	}
 
 	/* success */
@@ -430,6 +627,10 @@ out:
 void rtmp_close(rtmp_t r)
 {
 	if ( r ) {
+		unsigned int i;
+		for(i = 0; i < RTMP_MAX_CHANNELS; i++) {
+			free(r->chan[i].p_buf);
+		}
 		free(r->r_buf);
 		sock_close(r->sock);
 		free(r);

@@ -35,8 +35,12 @@ const char *amf_get_string(amf_t a);
 void amf_free(amf_t a);
 
 invoke_t amf_invoke_new(unsigned int nmemb);
+invoke_t amf_invoke_from_buf(const uint8_t *buf, size_t sz);
 int amf_invoke_set(invoke_t inv, unsigned int elem, amf_t obj);
 int amf_invoke_append(invoke_t inv, amf_t obj);
 void amf_invoke_free(invoke_t inv);
+
+void amf_invoke_pretty_print(invoke_t inv);
+void amf_pretty_print(amf_t a);
 
 #endif /* _AMF__H */

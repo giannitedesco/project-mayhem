@@ -34,7 +34,7 @@ struct _amf {
 struct _invoke {
 	unsigned int nmemb;
 	unsigned int cur_elem;
-	struct _amf *elem[0];
+	struct _amf **elem;
 };
 
 static struct _amf *amf_alloc(unsigned int type)
@@ -247,9 +247,24 @@ invoke_t amf_invoke_new(unsigned int nmemb)
 {
 	struct _invoke *inv;
 
-	inv = calloc(1, sizeof(*inv) + sizeof(inv->elem[0]) * nmemb);
-	if ( inv )
-		inv->nmemb = nmemb;
+	inv = calloc(1, sizeof(*inv));
+	if ( NULL == inv )
+		goto out;
+
+	inv->nmemb = nmemb;
+	if ( nmemb ) {
+		inv->elem = calloc(sizeof(*inv->elem), nmemb);
+		if ( NULL == inv->elem )
+			goto out_free;
+	}
+
+	/* success */
+	goto out;
+
+out_free:
+	free(inv);
+	inv = NULL;
+out:
 	return inv;
 }
 
@@ -265,6 +280,17 @@ int amf_invoke_set(invoke_t inv, unsigned int elem, amf_t obj)
 
 int amf_invoke_append(invoke_t inv, amf_t obj)
 {
+	if ( inv->cur_elem >= inv->nmemb ) {
+		struct _amf **new;
+
+		new = realloc(inv->elem, (inv->nmemb + 1) * sizeof(*new));
+		if ( NULL == new )
+			return 0;
+
+		inv->elem = new;
+		inv->elem[inv->nmemb] = NULL;
+		inv->nmemb++;
+	}
 	return amf_invoke_set(inv, inv->cur_elem++, obj);
 }
 
@@ -274,6 +300,7 @@ void amf_invoke_free(invoke_t inv)
 	if ( inv ) {
 		for(i = 0; i < inv->nmemb; i++)
 			amf_free(inv->elem[i]);
+		free(inv->elem);
 		free(inv);
 	}
 }
@@ -336,6 +363,17 @@ static uint64_t double_to_be64(double fp)
 	return htobe64(u.integral);
 }
 
+static uint64_t be64_to_double(double fp)
+{
+	union {
+		double fp;
+		uint64_t integral;
+	}u;
+
+	u.fp = fp;
+	return be64toh(u.integral);
+}
+
 static size_t amf_to_buf(struct _amf *a, uint8_t *buf)
 {
 	uint8_t *ptr = buf;
@@ -396,4 +434,185 @@ void amf_invoke_to_buf(invoke_t inv, uint8_t *buf)
 			buf++;
 		}
 	}
+}
+
+static struct _amf *parse_element(const uint8_t *buf, size_t sz, size_t *taken)
+{
+	const uint8_t *ptr = buf, *end = buf + sz;
+	uint8_t type;
+	uint16_t slen;
+	struct _amf *ret;
+
+	assert(sz);
+
+	type = ptr[0], ptr++;
+	switch(type) {
+	case AMF_NUMBER:
+		if ( ptr + sizeof(double) > end )
+			return 0;
+		ret = amf_number(be64_to_double(*(uint64_t *)ptr));
+		ptr += sizeof(double);
+		break;
+	case AMF_BOOLEAN:
+		if ( ptr >= end )
+			return NULL;
+		ret = amf_bool(ptr[0]);
+		ptr++;
+		break;
+	case AMF_STRING:
+		if ( ptr + 2 >= end )
+			return NULL;
+
+		slen = (ptr[0] << 8) | ptr[1];
+		ptr += 2;
+
+		if ( ptr + slen > end )
+			return NULL;
+
+		ret = amf_stringf("%.*s", slen, ptr);
+		ptr += slen;
+		break;
+	case AMF_OBJECT:
+		ret = amf_object();
+		do {
+			struct _amf *elem;
+			char *name;
+			size_t t;
+
+			if ( ptr + 2 >= end )
+				return NULL;
+
+			slen = (ptr[0] << 8) | ptr[1];
+			ptr += 2;
+
+			if ( ptr + slen > end ) {
+				amf_free(ret);
+				return NULL;
+			}
+
+			name = malloc(slen + 1);
+			if ( NULL == name ) {
+				free(name);
+				amf_free(ret);
+				return NULL;
+			}
+
+			memcpy(name, ptr, slen);
+			name[slen] = '\0';
+
+			elem = parse_element(ptr, end - ptr, &t);
+			if ( NULL == elem ) {
+				free(name);
+				amf_free(ret);
+				return NULL;
+			}
+
+			if ( !amf_object_set(ret, name, elem) ) {
+				free(name);
+				amf_free(ret);
+				return NULL;
+			}
+
+			ptr += t;
+		}while(*ptr != AMF_OBJECT_END);
+		break;
+	case AMF_NULL:
+		ret = amf_null();
+		break;
+	case AMF_UNDEFINED:
+		ret = amf_undefined();
+		break;
+	default:
+		printf("Unhandled: %d (0x%x)\n", type, type);
+		hex_dump(buf, sz, 16);
+		abort();
+	}
+
+	*taken = (ptr - buf);
+	return ret;
+}
+
+static void do_pretty_print(amf_t a, unsigned int depth)
+{
+	unsigned int i;
+	if ( NULL == a ) {
+		printf("null\n"); 
+		return;
+	}
+
+	switch(a->type) {
+	case AMF_NUMBER:
+		printf("%f\n", a->u.num);
+		break;
+	case AMF_BOOLEAN:
+		printf("%s\n", (a->u.b) ? "true" : "false");
+		break;
+	case AMF_STRING:
+		printf("'%s'\n", a->u.str);
+		break;
+	case AMF_OBJECT:
+		printf("{\n");
+		for(i = 0; i < a->u.obj.nmemb; i++) {
+			printf("%*c.%s = ", depth - 1, ' ',
+				a->u.obj.elem[i].key);
+			do_pretty_print(a->u.obj.elem[i].val, depth + 1);
+		}
+		printf("%*c}\n", depth - 1, ' ');
+		break;
+	case AMF_NULL:
+		printf("null\n");
+		break;
+	case AMF_UNDEFINED:
+		printf("*undefined*\n");
+		break;
+	default:
+		break;
+	}
+}
+
+void amf_pretty_print(amf_t a)
+{
+	do_pretty_print(a, 1);
+}
+
+void amf_invoke_pretty_print(invoke_t inv)
+{
+	unsigned int i;
+	printf("INVOKE(\n");
+	for(i = 0; i < inv->nmemb; i++) {
+		printf(" ");
+		amf_pretty_print(inv->elem[i]);
+	}
+	printf(")\n\n");
+}
+
+invoke_t amf_invoke_from_buf(const uint8_t *buf, size_t sz)
+{
+	struct _invoke *inv;
+	const uint8_t *end;
+	size_t taken;
+
+	inv = amf_invoke_new(0);
+	if ( NULL == inv )
+		goto out;
+
+	for(end = buf + sz; buf < end; buf += taken) {
+		struct _amf *a;
+
+		a = parse_element(buf, end - buf, &taken);
+		if ( NULL == a )
+			goto out_free;
+
+		if ( !amf_invoke_append(inv, a) )
+			goto out_free;
+	}
+
+	/* success */
+	goto out;
+
+out_free:
+	amf_invoke_free(inv);
+	inv = NULL;
+out:
+	return inv;
 }
