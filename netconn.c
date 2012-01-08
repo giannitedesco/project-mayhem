@@ -19,6 +19,43 @@ struct _netconn {
 	uint32_t dest;
 };
 
+struct netconn_status {
+	const char *level;
+	const char *code;
+	const char *desc;
+	/* details, clientid */
+};
+
+static int rip_status(amf_t o_stat, struct netconn_status *st)
+{
+	amf_t o_str;
+
+	memset(st, 0, sizeof(*st));
+
+	o_str = amf_object_get(o_stat, "level");
+	if ( NULL == o_str || amf_type(o_str) != AMF_STRING ) {
+		printf("netconn: bad 'level' in _result\n");
+		return 0;
+	}
+	st->level = amf_get_string(o_str);
+
+	o_str = amf_object_get(o_stat, "code");
+	if ( NULL == o_str || amf_type(o_str) != AMF_STRING ) {
+		printf("netconn: bad 'code' in _result\n");
+		return 0;
+	}
+	st->code = amf_get_string(o_str);
+
+	o_str = amf_object_get(o_stat, "description");
+	if ( NULL == o_str || amf_type(o_str) != AMF_STRING ) {
+		printf("netconn: bad 'desc' in _result\n");
+		return 0;
+	}
+	st->desc = amf_get_string(o_str);
+
+	return 1;
+}
+
 static invoke_t createstream(double num)
 {
 	invoke_t inv;
@@ -111,14 +148,11 @@ out:
 	return nc;
 }
 
-static int connect_result(netconn_t nc, invoke_t inv)
+static int std_result(netconn_t nc, invoke_t inv)
 {
+	struct netconn_status st;
 	unsigned int rc;
-	const char *level;
-	const char *code;
-	const char *desc;
 	amf_t o_rc, o_stat;
-	amf_t o_str;
 
 	if ( amf_invoke_nargs(inv) < 4 ) {
 		printf("netconn: too few args in result\n");
@@ -140,35 +174,21 @@ static int connect_result(netconn_t nc, invoke_t inv)
 
 	rc = amf_get_number(o_rc);
 
-	o_str = amf_object_get(o_stat, "level");
-	if ( NULL == o_str || amf_type(o_str) != AMF_STRING ) {
-		printf("netconn: bad 'level' in _result\n");
+	if ( !rip_status(o_stat, &st) )
 		return 0;
-	}
-	level = amf_get_string(o_str);
-
-	o_str = amf_object_get(o_stat, "code");
-	if ( NULL == o_str || amf_type(o_str) != AMF_STRING ) {
-		printf("netconn: bad 'code' in _result\n");
-		return 0;
-	}
-	code = amf_get_string(o_str);
-
-	o_str = amf_object_get(o_stat, "description");
-	if ( NULL == o_str || amf_type(o_str) != AMF_STRING ) {
-		printf("netconn: bad 'desc' in _result\n");
-		return 0;
-	}
-	desc = amf_get_string(o_str);
 
 	printf("NetConnection: result:\n");
 	printf(" rc = %d\n", rc);
-	printf(" level = %s\n", level);
-	printf(" code = %s\n", code);
-	printf(" desc = %s\n", desc);
+	printf(" level = %s\n", st.level);
+	printf(" code = %s\n", st.code);
+	printf(" desc = %s\n", st.desc);
 
-	if ( !strcmp(code, "NetConnection.Connect.Success") ) {
+	if ( !strcmp(st.code, "NetConnection.Connect.Success") ) {
 		nc->state = NETCONN_STATE_CONNECTED;
+	}else if ( !strcmp(st.code, "NetStream.Play.Reset") ) {
+		/* what to do? */
+	}else if ( !strcmp(st.code, "NetStream.Play.Starto") ) {
+		nc->state = NETCONN_STATE_PLAYING;
 	}
 
 	return 1;
@@ -202,12 +222,19 @@ static int n_result(netconn_t nc, invoke_t inv)
 {
 	switch(nc->state) {
 	case NETCONN_STATE_CONNECT_SENT:
-		return connect_result(nc, inv);
+		return std_result(nc, inv);
 	case NETCONN_STATE_CREATE_SENT:
 		return create_result(nc, inv);
 	default:
 		return 0;
 	}
+}
+
+static int n_error(netconn_t nc, invoke_t inv)
+{
+	printf("Got an error:\n");
+	amf_invoke_pretty_print(inv);
+	return 1;
 }
 
 static int dispatch(netconn_t nc, invoke_t inv, const char *method)
@@ -217,6 +244,8 @@ static int dispatch(netconn_t nc, invoke_t inv, const char *method)
 		int (*call)(netconn_t nc, invoke_t inv);
 	}tbl[] = {
 		{.method = "_result", .call = n_result},
+		{.method = "_error", .call = n_error},
+		{.method = "onStatus", .call = std_result},
 	};
 	unsigned int i;
 
