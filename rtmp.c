@@ -190,7 +190,7 @@ static int rbuf_update_size(struct _rtmp *r)
 	size_t ofs;
 
 	printf("rtmp: Change chunk size: %zu\n", r->chunk_sz);
-	new = realloc(r->r_buf, r->chunk_sz);
+	new = realloc(r->r_buf, r->chunk_sz + RTMP_HDR_MAX_SZ);
 	if ( NULL == new )
 		return transition(r, STATE_ABORT);
 
@@ -198,7 +198,7 @@ static int rbuf_update_size(struct _rtmp *r)
 
 	r->r_buf = new;
 	r->r_cur = new + ofs;
-	r->r_space = r->chunk_sz;
+	r->r_space = (r->chunk_sz + RTMP_HDR_MAX_SZ) - ofs;
 	return 1;
 }
 
@@ -216,7 +216,7 @@ static int rbuf_request_size(struct _rtmp *r, size_t sz)
 
 	if ( sz <= current_buf_sz(r) ) {
 		/* shrink the buffer later, after we're done with it */
-		printf("Request bufsz %zu: deferred\n", sz);
+		printf("rtmp: Request bufsz %zu: deferred\n", sz);
 		return 1;
 	}
 
@@ -293,6 +293,13 @@ static int r_invoke(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 	return 1;
 }
 
+static int r_ping(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
+			 const uint8_t *buf, size_t sz)
+{
+	printf("rtmp: received: CLIENT_BW\n");
+	return 1;
+}
+
 static int r_server_bw(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 			 const uint8_t *buf, size_t sz)
 {
@@ -301,6 +308,13 @@ static int r_server_bw(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 		return 0;
 
 	r->server_bw = decode_int32(buf);
+	return 1;
+}
+
+static int r_client_bw(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
+			 const uint8_t *buf, size_t sz)
+{
+	printf("rtmp: received: CLIENT_BW\n");
 	return 1;
 }
 
@@ -321,7 +335,9 @@ static int rtmp_dispatch(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 {
 	rmsg_t tbl[] = {
 		[RTMP_MSG_CHUNK_SZ] r_chunksz,
+		[RTMP_MSG_PING] r_ping,
 		[RTMP_MSG_SERVER_BW] r_server_bw,
+		[RTMP_MSG_CLIENT_BW] r_client_bw,
 		[RTMP_MSG_INVOKE] r_invoke,
 	};
 
@@ -352,7 +368,7 @@ static ssize_t decode_rtmp(struct _rtmp *r, const uint8_t *buf, size_t sz)
 	type = (*ptr & 0xc0) >> 6;
 	chan = (*ptr & 0x3f);
 	if ( (++ptr) > end )
-		return 0;
+		return -1;
 
 	switch(chan) {
 	case 0:
@@ -409,13 +425,14 @@ static ssize_t decode_rtmp(struct _rtmp *r, const uint8_t *buf, size_t sz)
 			pkt->p_buf = NULL;
 		}
 
-		return 0;
+		return -1;
 	}
 
 	memcpy(pkt->p_cur, ptr, chunk_sz);
 	pkt->p_cur += chunk_sz;
 	pkt->p_left -= chunk_sz;
-//	printf("%zu/%zu @ %zu\n", chunk_sz,
+
+//	printf("rtmp: recv: %zu/%zu @ %zu\n", chunk_sz,
 //		(pkt->p_cur + pkt->p_left) - pkt->p_buf,
 //		(pkt->p_cur - pkt->p_buf));
 
@@ -455,6 +472,8 @@ int rtmp_invoke(rtmp_t r, invoke_t inv)
 
 	ret = rtmp_send(r, 3, 0, 1, RTMP_MSG_INVOKE, buf, sz);
 	free(buf);
+	printf("rtmp: sent invoke:\n");
+	amf_invoke_pretty_print(inv);
 	return ret;
 }
 
@@ -519,7 +538,7 @@ static ssize_t rtmp_drain_buf(struct _rtmp *r)
 		break;
 	case STATE_CONNECTED:
 		ret = decode_rtmp(r, buf, sz);
-		return sz;
+		break;
 	default:
 		abort();
 	}
@@ -530,15 +549,17 @@ static ssize_t rtmp_drain_buf(struct _rtmp *r)
 static int fill_rcv_buf(struct _rtmp *r)
 {
 	ssize_t ret;
+	assert(r->r_space);
 	ret = sock_recv(r->sock, r->r_cur, r->r_space);
 	if ( ret < 0 )
 		return transition(r, STATE_ABORT);
 	if ( ret == 0 )
 		return transition(r, STATE_CONN_RESET);
 
+	//printf("rtmp: received %zu bytes\n", ret);
+	//hex_dump(r->r_cur, ret, 16);
 	r->r_cur += ret;
 	r->r_space -= ret;
-//	printf("rtmp: received %zu bytes\n", ret);
 
 	return 1;
 }
@@ -569,7 +590,11 @@ again:
 	/* try to match buffer size to requested chunk size,
 	 * provided we won't chop off any outstanding data that is
 	*/
-	if ( r->chunk_sz != current_buf_sz(r) &&
+//	printf("req = %zu, cur = %zu, used = %zu, space = %zu\n",
+//		r->chunk_sz, current_buf_sz(r),
+//		(size_t)(r->r_cur - r->r_buf),
+//		r->r_space);
+	if ( r->chunk_sz != (current_buf_sz(r) - RTMP_HDR_MAX_SZ) &&
 		r->chunk_sz >= (size_t)(r->r_cur - r->r_buf) ) {
 		if ( !rbuf_update_size(r) )
 			return 0;
