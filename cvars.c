@@ -8,23 +8,7 @@
 
 #include <ctype.h>
 
-struct _wmvars {
-	char *pageurl;
-	char *tcUrl;
-	char *signupargs;
-	char *sessiontype;
-	char *nickname;
-	char *sakey;
-	char *g;
-	char *ldmov;
-	char *lang;
-	char *sk;
-	unsigned int sid;
-	unsigned int srv;
-	unsigned int pid;
-	unsigned int ft;
-	unsigned int hd;
-};
+#include "cvars.h"
 
 static int p_sid(struct _wmvars *v, const uint8_t *key, uint8_t *val)
 {

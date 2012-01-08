@@ -24,15 +24,17 @@ CFLAGS := -g -pipe -O2 -Wall \
 	$(EXTRA_DEFS)
 
 ifeq ($(OS), win32)
-OS_OBJ := blob_win32.o
+OS_OBJ := blob_win32.o os-win32.o
 else
-OS_OBJ := blob.o
+OS_OBJ := blob.o os-posix.o
 endif
 
 WMDUMP_BIN := wmdump$(SUFFIX)
 WMDUMP_LIBS := 
 WMDUMP_OBJ = $(OS_OBJ) \
-		vars.o \
+		cvars.o \
+		rtmp.o \
+		mayhem.o \
 		main.o
 
 ALL_BIN := $(WMDUMP_BIN)
