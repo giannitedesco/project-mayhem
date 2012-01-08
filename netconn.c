@@ -8,9 +8,11 @@
 #include <os.h>
 
 #include <rtmp/amf.h>
+#include <rtmp/rtmp.h>
 #include <rtmp/netconn.h>
 
 struct _netconn {
+	rtmp_t rtmp;
 	unsigned int state;
 	int chan;
 	uint32_t dest;
@@ -23,6 +25,43 @@ struct nc_result {
 	const char *desc;
 };
 
+static invoke_t createstream(double num)
+{
+	invoke_t inv;
+
+	inv = amf_invoke_new(3);
+	if ( NULL == inv )
+		return NULL;
+
+	if ( !amf_invoke_append(inv, amf_string("createStream")) )
+		goto err;
+	if ( !amf_invoke_append(inv, amf_number(num)) )
+		goto err;
+	if ( !amf_invoke_append(inv, amf_null()) )
+		goto err;
+	return inv;
+err:
+	amf_invoke_free(inv);
+	return NULL;
+}
+
+int netconn_createstream(netconn_t nc, double num)
+{
+	invoke_t inv;
+	int ret;
+
+	inv = createstream(num);
+	if ( NULL == inv )
+		return 0;
+
+	ret = rtmp_flex_invoke(nc->rtmp, nc->chan, nc->dest, inv);
+	if ( ret ) {
+		nc->state = NETCONN_STATE_CREATE_SENT;
+	}
+	amf_invoke_free(inv);
+	return ret;
+}
+
 void netconn_set_state(netconn_t nc, unsigned int state)
 {
 	nc->state = state;
@@ -33,7 +72,7 @@ unsigned int netconn_state(netconn_t nc)
 	return nc->state;
 }
 
-netconn_t netconn_new(int chan, uint32_t dest)
+netconn_t netconn_new(rtmp_t rtmp, int chan, uint32_t dest)
 {
 	struct _netconn *nc;
 
@@ -41,6 +80,7 @@ netconn_t netconn_new(int chan, uint32_t dest)
 	if ( NULL == nc )
 		goto out;
 
+	nc->rtmp = rtmp;
 	nc->chan = chan;
 	nc->dest = dest;
 	/* success */

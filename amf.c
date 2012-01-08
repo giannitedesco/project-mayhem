@@ -538,9 +538,11 @@ static struct _amf *parse_element(const uint8_t *buf, size_t sz, size_t *taken)
 		ret = amf_undefined();
 		break;
 	default:
-		printf("Unhandled: %d (0x%x)\n", type, type);
+		printf("amf: Unhandled: %d (0x%x)\n", type, type);
 		hex_dump(buf, sz, 16);
-		abort();
+		ptr = end;
+		ret = amf_undefined();
+		//abort();
 	}
 
 	*taken = (ptr - buf);

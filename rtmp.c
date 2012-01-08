@@ -477,7 +477,8 @@ static ssize_t decode_rtmp(struct _rtmp *r, const uint8_t *buf, size_t sz)
 	return (ptr - buf);
 }
 
-int rtmp_invoke(rtmp_t r, int chan, uint32_t dest, invoke_t inv)
+static int do_invoke(rtmp_t r, int chan, uint32_t dest,
+			invoke_t inv, uint8_t type)
 {
 	uint8_t *buf;
 	size_t sz;
@@ -490,13 +491,23 @@ int rtmp_invoke(rtmp_t r, int chan, uint32_t dest, invoke_t inv)
 
 	amf_invoke_to_buf(inv, buf);
 
-	ret = rtmp_send(r, chan, dest, 1, RTMP_MSG_INVOKE, buf, sz);
+	ret = rtmp_send(r, chan, dest, 1, type, buf, sz);
 	free(buf);
 	dprintf("rtmp: sent invoke:\n");
 #if WMDUMP_DEBUG 
 	amf_invoke_pretty_print(inv);
 #endif
 	return ret;
+}
+
+int rtmp_flex_invoke(rtmp_t r, int chan, uint32_t dest, invoke_t inv)
+{
+	return do_invoke(r, chan, dest, inv, RTMP_MSG_FLEX_MESSAGE);
+}
+
+int rtmp_invoke(rtmp_t r, int chan, uint32_t dest, invoke_t inv)
+{
+	return do_invoke(r, chan, dest, inv, RTMP_MSG_INVOKE);
 }
 
 static char *urlparse(const char *url, uint16_t *port)

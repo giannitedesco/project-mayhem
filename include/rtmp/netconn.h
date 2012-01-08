@@ -8,11 +8,14 @@
 #define NETCONN_STATE_INITIAL		0
 #define NETCONN_STATE_CONNECT_SENT	1
 #define NETCONN_STATE_CONNECTED		2
+#define NETCONN_STATE_CREATE_SENT	3
+#define NETCONN_STATE_CREATED		4
 
 typedef struct _netconn *netconn_t;
 
-netconn_t netconn_new(int chan, uint32_t dest);
+netconn_t netconn_new(rtmp_t rtmp, int chan, uint32_t dest);
 int netconn_invoke(netconn_t nc, invoke_t inv);
+int netconn_createstream(netconn_t nc, double num);
 
 /* to let netconn know when you've sent messages on its behalf:
  * ie. custom connect AMF

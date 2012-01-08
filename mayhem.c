@@ -14,7 +14,13 @@
 #include "cvars.h"
 #include "mayhem-amf.h"
 
+#define MAYHEM_STATE_ABORT		0
+#define MAYHEM_STATE_CONNECTING		1
+#define MAYHEM_STATE_FROZEN		2
+#define MAYHEM_STATE_AUTHORIZED		3
+
 struct _mayhem {
+	unsigned int state;
 	rtmp_t rtmp;
 	netconn_t nc;
 };
@@ -23,6 +29,11 @@ struct naiad_room {
 	unsigned int flags;
 	const char *topic;
 };
+
+static void mayhem_abort(struct _mayhem *m)
+{
+	m->state = MAYHEM_STATE_ABORT;
+}
 
 static int NaiadAuthorize(mayhem_t m, int code,
 				const char *nick,
@@ -35,12 +46,14 @@ static int NaiadAuthorize(mayhem_t m, int code,
 	printf(" performer: %s\n", bitch);
 	printf(" room flags: %d (0x%x)\n", room->flags, room->flags);
 	printf(" topic is: %s\n", (room->topic) ? room->topic : "");
+	m->state = MAYHEM_STATE_AUTHORIZED;
 	return 1;
 }
 
 static int NaiadFreeze(mayhem_t m, int code, void *u1, int u2, const char *desc)
 {
 	printf("NaiadFreeze: %d: %s\n", code, desc);
+	m->state = MAYHEM_STATE_FROZEN;
 	return 1;
 }
 
@@ -173,6 +186,10 @@ static int dispatch(void *priv, invoke_t inv)
 	if ( ret )
 		return 1;
 
+	/* TODO: We may need to handle netconn status and reflect it
+	 * in overall application state
+	*/
+
 	/* unhandled */
 	return 0;
 }
@@ -185,11 +202,18 @@ static int invoke_connect(struct _mayhem *m, struct _wmvars *v)
 	if ( NULL == inv )
 		goto out;
 	ret = rtmp_invoke(m->rtmp, 3, 0, inv);
-	if ( ret )
+	if ( ret ) {
+		m->state = MAYHEM_STATE_CONNECTING;
 		netconn_set_state(m->nc, NETCONN_STATE_CONNECT_SENT);
+	}
 	amf_invoke_free(inv);
 out:
 	return ret;
+}
+
+static int create_stream(struct _mayhem *m, double num)
+{
+	return netconn_createstream(m->nc, 2.0);
 }
 
 void mayhem_close(mayhem_t m)
@@ -212,7 +236,7 @@ mayhem_t mayhem_connect(wmvars_t vars)
 	if ( NULL == m->rtmp )
 		goto out_free;
 
-	m->nc = netconn_new(3, 0);
+	m->nc = netconn_new(m->rtmp, 3, 0);
 	if ( NULL == m->nc )
 		goto out_free;
 
@@ -221,8 +245,24 @@ mayhem_t mayhem_connect(wmvars_t vars)
 	if ( !invoke_connect(m, vars) )
 		goto out_free_netconn;
 
-	while ( rtmp_pump(m->rtmp) )
-		/* do nothing */;
+	while ( m->state != MAYHEM_STATE_ABORT && rtmp_pump(m->rtmp) ) {
+		switch(m->state) {
+		case MAYHEM_STATE_CONNECTING:
+			/* I don't sleep, I wait */
+			break;
+		case MAYHEM_STATE_FROZEN:
+			printf("mayhem: fuck this shit!\n");
+			mayhem_abort(m);
+			break;
+		case MAYHEM_STATE_AUTHORIZED:
+			printf("mayhem: giggity giggity!\n");
+			create_stream(m, 2.0);
+			break;
+		default:
+			printf("ugh? %d\n", m->state);
+			abort();
+		}
+	}
 
 	/* success */
 	goto out;
