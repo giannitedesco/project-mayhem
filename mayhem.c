@@ -259,6 +259,7 @@ static int play(struct _mayhem *m)
 void mayhem_close(mayhem_t m)
 {
 	if ( m ) {
+		flv_close(m->flv);
 		free(m->bitch);
 		netconn_free(m->nc);
 		rtmp_close(m->rtmp);
