@@ -37,6 +37,7 @@ WMDUMP_OBJ = $(OS_OBJ) \
 		rtmp.o \
 		amf.o \
 		mayhem.o \
+		mayhem-amf.o \
 		main.o
 
 ALL_BIN := $(WMDUMP_BIN)
