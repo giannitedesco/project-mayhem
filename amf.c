@@ -373,8 +373,8 @@ static double be64_to_double(uint64_t integral)
 		double fp;
 		uint64_t integral;
 	}u;
-	u.fp = 0.0; /* shutup gcc, i know its skanky */
-	u.integral = be64toh(u.integral);
+
+	u.integral = be64toh(integral);
 	return u.fp;
 }
 
@@ -609,8 +609,8 @@ invoke_t amf_invoke_from_buf(const uint8_t *buf, size_t sz)
 	const uint8_t *end;
 	size_t taken;
 
-	//printf("==== AMF INVOKE ===\n");
-	//hex_dump(buf, sz, 16);
+//	printf("==== AMF INVOKE ===\n");
+//	hex_dump(buf, sz, 16);
 	inv = amf_invoke_new(0);
 	if ( NULL == inv )
 		goto out;
