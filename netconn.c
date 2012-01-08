@@ -56,6 +56,35 @@ int netconn_createstream(netconn_t nc, double num)
 	return ret;
 }
 
+int netconn_play(netconn_t nc, amf_t obj)
+{
+	invoke_t inv;
+	int ret = 0;
+
+	inv = amf_invoke_new(4);
+	if ( NULL == inv ) {
+		amf_free(obj);
+		return 0;
+	}
+
+	if ( !amf_invoke_set(inv, 0, amf_string("play")) )
+		goto out;
+	if ( !amf_invoke_set(inv, 1, amf_number(0.0)) ) /* seq ? */
+		goto out;
+	if ( !amf_invoke_set(inv, 2, amf_null()) )
+		goto out;
+	if ( !amf_invoke_set(inv, 3, obj) )
+		goto out;
+
+	ret = rtmp_flex_invoke(nc->rtmp, 8, nc->stream_id, inv);
+	if ( ret ) {
+		nc->state = NETCONN_STATE_PLAY_SENT;
+	}
+out:
+	amf_invoke_free(inv);
+	return ret;
+}
+
 void netconn_set_state(netconn_t nc, unsigned int state)
 {
 	nc->state = state;

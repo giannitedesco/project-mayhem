@@ -19,9 +19,12 @@
 #define MAYHEM_STATE_FROZEN		2
 #define MAYHEM_STATE_AUTHORIZED		3
 #define MAYHEM_STATE_GOT_STREAM		4
+#define MAYHEM_STATE_PLAYING		5
+#define MAYHEM_STATE_PAUSED		6
 
 struct _mayhem {
 	unsigned int state;
+	unsigned int sid;
 	rtmp_t rtmp;
 	netconn_t nc;
 };
@@ -194,6 +197,9 @@ static int dispatch(void *priv, invoke_t inv)
 	case NETCONN_STATE_CREATED:
 		m->state = MAYHEM_STATE_GOT_STREAM;
 		break;
+	case NETCONN_STATE_PLAYING:
+		m->state = MAYHEM_STATE_PLAYING;
+		break;
 	default:
 		break;
 	}
@@ -218,10 +224,18 @@ out:
 	return ret;
 }
 
-static int authorized(struct _mayhem *m, double num)
+static int create_stream(struct _mayhem *m, double num)
 {
 	if (netconn_state(m->nc) == NETCONN_STATE_CONNECTED) {
 		return netconn_createstream(m->nc, 2.0);
+	}
+	return 1;
+}
+
+static int play(struct _mayhem *m)
+{
+	if (netconn_state(m->nc) == NETCONN_STATE_CREATED ) {
+		return netconn_play(m->nc, amf_stringf("%d", m->sid));
 	}
 	return 1;
 }
@@ -241,6 +255,8 @@ mayhem_t mayhem_connect(wmvars_t vars)
 	m = calloc(1, sizeof(*m));
 	if ( NULL == m )
 		goto out;
+
+	m->sid = vars->sid;
 
 	m->rtmp = rtmp_connect(vars->tcUrl);
 	if ( NULL == m->rtmp )
@@ -265,10 +281,10 @@ mayhem_t mayhem_connect(wmvars_t vars)
 			mayhem_abort(m);
 			break;
 		case MAYHEM_STATE_AUTHORIZED:
-			authorized(m, 2.0);
+			create_stream(m, 2.0);
 			break;
 		case MAYHEM_STATE_GOT_STREAM:
-			printf("Time, to play\n");
+			play(m);
 			break;
 		default:
 			printf("ugh? %d\n", m->state);
