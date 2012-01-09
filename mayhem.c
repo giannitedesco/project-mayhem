@@ -155,6 +155,11 @@ static int i_freeze(mayhem_t m, invoke_t inv)
 				NULL, -1, amf_get_string(o_desc));
 }
 
+/* NaiadPledgeGold(number, null, {.amount = number, .status = number} */
+/* NaiadAddChat(number, nll, number, string, string chat, bool, bool, bool,
+ *		string, object, { .flags = number, .goldamtstr = number }
+ */
+
 static int naiad_dispatch(mayhem_t m, invoke_t inv, const char *method)
 {
 	static const struct {
@@ -163,6 +168,11 @@ static int naiad_dispatch(mayhem_t m, invoke_t inv, const char *method)
 	}tbl[] = {
 		{.method = "NaiadFreeze", .call = i_freeze},
 		{.method = "NaiadAuthorized", .call = i_auth},
+		/* NaiadUserList */
+		/* NaiadPledgeGold */
+		/* NaiadAddChat */
+		/* NaiadPreGoldShow */
+		/* NaiadGoldShow */
 	};
 	unsigned int i;
 
