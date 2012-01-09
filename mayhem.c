@@ -73,8 +73,8 @@ static int NaiadAuthorize(mayhem_t m, int code,
 static int NaiadFreeze(mayhem_t m, int code, void *u1, int u2, const char *desc)
 {
 	printf("NaiadFreeze: %d: %s\n", code, desc);
-	//m->state = MAYHEM_STATE_FROZEN;
-	m->state = MAYHEM_STATE_AUTHORIZED;
+	m->state = MAYHEM_STATE_FROZEN;
+	//m->state = MAYHEM_STATE_AUTHORIZED;
 	return 1;
 }
 
