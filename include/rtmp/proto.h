@@ -6,6 +6,7 @@
 #define _RTMP_PROTO_H
 
 #define RTMP_MSG_CHUNK_SZ		0x01
+#define RTMP_MSG_READ_REPORT		0x03
 #define RTMP_MSG_CTL			0x04
 #define RTMP_MSG_SERVER_BW		0x05
 #define RTMP_MSG_CLIENT_BW		0x06

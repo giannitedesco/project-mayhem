@@ -21,6 +21,9 @@
 #define STATE_HANDSHAKE_2	4
 #define STATE_CONNECTED		4 /* equivalent to handshake_2 */
 
+/* send read updates every 1MB */
+#define UPDATE_FREQUENCY	(1 << 20)
+
 struct rtmp_chan {
 	uint8_t *p_buf;
 	uint8_t *p_cur;
@@ -44,6 +47,8 @@ struct _rtmp {
 	uint32_t client_bw;
 	os_sock_t sock;
 	uint8_t client_bw2;
+	uint32_t nbytes;
+	uint32_t nbytes_update;
 
 	struct rtmp_chan chan[RTMP_MAX_CHANNELS];
 };
@@ -219,6 +224,22 @@ static int send_server_bw(struct _rtmp *r)
 	return rtmp_send(r, 2, 0, 0xfe227, RTMP_MSG_SERVER_BW, buf, sizeof(buf));
 }
 
+static int send_read_report(struct _rtmp *r)
+{
+	uint8_t buf[4];
+	static int ugh;
+	int ret;
+
+	/* hrm :\ */
+	ugh += 100000;
+
+	encode_int32(buf, r->nbytes);
+	ret = rtmp_send(r, 2, 0, ugh, RTMP_MSG_READ_REPORT, buf, sizeof(buf));
+	if ( ret ) {
+		r->nbytes_update = r->nbytes;
+	}
+	return 1;
+}
 static int send_ctl(struct _rtmp *r, uint16_t type, uint32_t val, uint32_t ts)
 {
 	uint8_t buf[6];
@@ -448,6 +469,7 @@ static int r_notify(struct _rtmp *r, struct rtmp_pkt *pkt,
 static int r_audio(struct _rtmp *r, struct rtmp_pkt *pkt,
 			 const uint8_t *buf, size_t sz)
 {
+	r->nbytes += sz;
 	if ( r->ev_ops && r->ev_ops->audio ) {
 		return (*r->ev_ops->audio)(r->ev_priv, pkt, buf, sz);
 	}
@@ -457,6 +479,7 @@ static int r_audio(struct _rtmp *r, struct rtmp_pkt *pkt,
 static int r_video(struct _rtmp *r, struct rtmp_pkt *pkt,
 			 const uint8_t *buf, size_t sz)
 {
+	r->nbytes += sz;
 	if ( r->ev_ops && r->ev_ops->video ) {
 		return (*r->ev_ops->video)(r->ev_priv, pkt, buf, sz);
 	}
@@ -480,6 +503,7 @@ static int rtmp_dispatch(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 		[RTMP_MSG_INVOKE] r_invoke,
 	};
 	struct rtmp_pkt pkt;
+	int ret;
 
 	pkt.chan = chan;
 	pkt.dest = dest;
@@ -496,7 +520,11 @@ static int rtmp_dispatch(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 		return 1;
 	}
 
-	return (*tbl[type])(r, &pkt, buf, sz);
+	ret = (*tbl[type])(r, &pkt, buf, sz);
+	if ( r->nbytes >= r->nbytes_update + UPDATE_FREQUENCY ) {
+		send_read_report(r);
+	}
+	return ret;
 }
 
 /* sigh.. */
