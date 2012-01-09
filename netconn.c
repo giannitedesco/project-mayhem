@@ -187,7 +187,7 @@ static int std_result(netconn_t nc, invoke_t inv)
 		nc->state = NETCONN_STATE_CONNECTED;
 	}else if ( !strcmp(st.code, "NetStream.Play.Reset") ) {
 		/* what to do? */
-	}else if ( !strcmp(st.code, "NetStream.Play.Starto") ) {
+	}else if ( !strcmp(st.code, "NetStream.Play.Start") ) {
 		nc->state = NETCONN_STATE_PLAYING;
 	}
 

@@ -74,6 +74,7 @@ static int NaiadFreeze(mayhem_t m, int code, void *u1, int u2, const char *desc)
 {
 	printf("NaiadFreeze: %d: %s\n", code, desc);
 	m->state = MAYHEM_STATE_FROZEN;
+	//m->state = MAYHEM_STATE_AUTHORIZED;
 	return 1;
 }
 
@@ -214,6 +215,7 @@ static int dispatch(void *priv, invoke_t inv)
 		m->state = MAYHEM_STATE_GOT_STREAM;
 		break;
 	case NETCONN_STATE_PLAYING:
+		printf("mayhem: playing...\n");
 		m->state = MAYHEM_STATE_PLAYING;
 		break;
 	default:
@@ -357,6 +359,9 @@ mayhem_t mayhem_connect(wmvars_t vars)
 			break;
 		case MAYHEM_STATE_GOT_STREAM:
 			play(m);
+			break;
+		case MAYHEM_STATE_PLAYING:
+			/* let the good times roll */
 			break;
 		default:
 			printf("ugh? %d\n", m->state);
