@@ -306,7 +306,7 @@ static int rip(void *priv, struct rtmp_pkt *pkt,
 static int stream_start(void *priv)
 {
 	struct _mayhem *m = priv;
-	char buf[strlen(m->bitch) + 128];
+	char buf[((m->bitch) ? strlen(m->bitch) : 64) + 128];
 	char tmbuf[128];
 	struct tm *tm;
 	time_t t;
@@ -315,7 +315,8 @@ static int stream_start(void *priv)
 
 	tm = localtime(&t);
 	strftime(tmbuf, sizeof(tmbuf), "%F-%H-%M-%S", tm);
-	snprintf(buf, sizeof(buf), "%s-%s.flv", m->bitch, tmbuf);
+	snprintf(buf, sizeof(buf), "%s-%s.flv",
+		(m->bitch) ? m->bitch : "UNKNOWN", tmbuf);
 
 	if ( m->flv )
 		flv_close(m->flv);
