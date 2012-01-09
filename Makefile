@@ -72,6 +72,9 @@ $(WMDUMP_BIN): $(WMDUMP_OBJ)
 clean:
 	rm -f $(ALL_TARGETS) $(ALL_OBJ) $(ALL_DEP)
 
+mrproper: clean
+	rm -f $(CONFIG_MAK)
+
 ifneq ($(MAKECMDGOALS),clean)
 -include $(ALL_DEP)
 endif
