@@ -1,5 +1,8 @@
+# fuck off default makefile rules
 .SUFFIXES:
+SUFFIX := 
 
+# get the build configuration (./configure)
 CONFIG_MAK := Config.mak
 ifeq ($(filter clean, $(MAKECMDGOALS)),clean)
 ifeq ($(filter clean, $(MAKECMDGOALS)),mrproper)
@@ -11,12 +14,13 @@ else
 include $(CONFIG_MAK)
 endif
 
-SUFFIX := 
-
+# commands
 CC := $(CROSS_COMPILE)gcc
 LD := $(CROSS_COMPILE)ld
 AR := $(CROSS_COMPILE)ar
+RM := rm
 
+# the obvious
 EXTRA_DEFS := -D_FILE_OFFSET_BITS=64
 CFLAGS := -g -pipe -O2 -Wall \
 	-Wsign-compare -Wcast-align \
@@ -61,12 +65,14 @@ TARGET: all
 
 all: $(ALL_BIN)
 
+# if clean is one of the goals, make sure clean comes before everything else
 ifeq ($(filter clean, $(MAKECMDGOALS)),clean)
 CLEAN_DEP := clean
 else
 CLEAN_DEP :=
 endif
 
+# build C files and track deps
 %.o %.d: %.c $(CLEAN_DEP) $(CONFIG_MAK) Makefile
 	@echo " [C] $<"
 	@$(CC) $(CFLAGS) -MMD -MF $(patsubst %.o, .%.d, $@) \
@@ -78,11 +84,16 @@ $(WMDUMP_BIN): $(WMDUMP_OBJ)
 	@$(CC) $(CFLAGS) -o $@ $(WMDUMP_OBJ) $(WMDUMP_LIBS)
 
 clean:
-	rm -f $(ALL_TARGETS) $(ALL_OBJ) $(ALL_DEP)
+	$(RM) -f $(ALL_TARGETS) $(ALL_OBJ) $(ALL_DEP)
 
+# clean everything and delete config too
 mrproper: clean
-	rm -f $(CONFIG_MAK)
+	$(RM) -f $(CONFIG_MAK)
 
+# include whatever dep files we have
+# ignore them if we're cleaning up
 ifneq ($(MAKECMDGOALS),clean)
+ifneq ($(MAKECMDGOALS),mrproepr)
 -include $(ALL_DEP)
+endif
 endif
