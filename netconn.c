@@ -47,11 +47,9 @@ static int rip_status(amf_t o_stat, struct netconn_status *st)
 	st->code = amf_get_string(o_str);
 
 	o_str = amf_object_get(o_stat, "description");
-	if ( NULL == o_str || amf_type(o_str) != AMF_STRING ) {
-		printf("netconn: bad 'desc' in _result\n");
-		return 0;
+	if ( o_str && amf_type(o_str) == AMF_STRING ) {
+		st->desc = amf_get_string(o_str);
 	}
-	st->desc = amf_get_string(o_str);
 
 	return 1;
 }
@@ -189,6 +187,8 @@ static int std_result(netconn_t nc, invoke_t inv)
 		/* what to do? */
 	}else if ( !strcmp(st.code, "NetStream.Play.Start") ) {
 		nc->state = NETCONN_STATE_PLAYING;
+	}else if ( !strcmp(st.code, "NetStream.Play.InsufficientBW") ) {
+		/* why oh why? */
 	}
 
 	return 1;
