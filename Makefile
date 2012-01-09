@@ -1,7 +1,15 @@
 .SUFFIXES:
 
 CONFIG_MAK := Config.mak
+ifeq ($(filter clean, $(MAKECMDGOALS)),clean)
+ifeq ($(filter clean, $(MAKECMDGOALS)),mrproper)
+-include $(CONFIG_MAK)
+else
+-include $(CONFIG_MAK)
+endif
+else
 include $(CONFIG_MAK)
+endif
 
 SUFFIX := 
 
