@@ -8,7 +8,7 @@
 
 #include <rtmp/amf.h>
 #include <rtmp/rtmp.h>
-#include <rtmp/netconn.h>
+#include <rtmp/netstatus.h>
 #include <flv.h>
 
 #include "cvars.h"
@@ -27,7 +27,7 @@
 struct _mayhem {
 	char *bitch;
 	rtmp_t rtmp;
-	netconn_t nc;
+	netstatus_t nc;
 	FILE *flv;
 	unsigned int state;
 	unsigned int sid;
@@ -210,21 +210,21 @@ static int dispatch(void *priv, invoke_t inv)
 	if ( ret )
 		return 1;
 
-	/* ret == 0, means unhandled, lets try netconn */
-	ret = netconn_invoke(m->nc, inv);
+	/* ret == 0, means unhandled, lets try netstatus */
+	ret = netstatus_invoke(m->nc, inv);
 	if ( ret < 0 )
 		return 0;
 	if ( !ret )
 		return 0; /* unhandled */
 
-	/* TODO: We may need to handle netconn status and reflect it
+	/* TODO: We may need to handle netstatus status and reflect it
 	 * in overall application state
 	*/
-	switch(netconn_state(m->nc)) {
-	case NETCONN_STATE_CREATED:
+	switch(netstatus_state(m->nc)) {
+	case NETSTATUS_STATE_CREATED:
 		m->state = MAYHEM_STATE_GOT_STREAM;
 		break;
-	case NETCONN_STATE_PLAYING:
+	case NETSTATUS_STATE_PLAYING:
 		printf("mayhem: playing...\n");
 		m->state = MAYHEM_STATE_PLAYING;
 		break;
@@ -245,7 +245,7 @@ static int invoke_connect(struct _mayhem *m, struct _wmvars *v)
 	ret = rtmp_invoke(m->rtmp, 3, 0, inv);
 	if ( ret ) {
 		m->state = MAYHEM_STATE_CONNECTING;
-		netconn_set_state(m->nc, NETCONN_STATE_CONNECT_SENT);
+		netstatus_set_state(m->nc, NETSTATUS_STATE_CONNECT_SENT);
 	}
 	amf_invoke_free(inv);
 out:
@@ -254,16 +254,16 @@ out:
 
 static int create_stream(struct _mayhem *m, double num)
 {
-	if (netconn_state(m->nc) == NETCONN_STATE_CONNECTED) {
-		return netconn_createstream(m->nc, 2.0);
+	if (netstatus_state(m->nc) == NETSTATUS_STATE_CONNECTED) {
+		return netstatus_createstream(m->nc, 2.0);
 	}
 	return 1;
 }
 
 static int play(struct _mayhem *m)
 {
-	if (netconn_state(m->nc) == NETCONN_STATE_CREATED ) {
-		return netconn_play(m->nc, amf_stringf("%d", m->sid));
+	if (netstatus_state(m->nc) == NETSTATUS_STATE_CREATED ) {
+		return netstatus_play(m->nc, amf_stringf("%d", m->sid));
 	}
 	return 1;
 }
@@ -273,7 +273,7 @@ void mayhem_close(mayhem_t m)
 	if ( m ) {
 		flv_close(m->flv);
 		free(m->bitch);
-		netconn_free(m->nc);
+		netstatus_free(m->nc);
 		rtmp_close(m->rtmp);
 		free(m);
 	}
@@ -361,14 +361,14 @@ mayhem_t mayhem_connect(wmvars_t vars)
 	if ( NULL == m->rtmp )
 		goto out_free;
 
-	m->nc = netconn_new(m->rtmp, 3, 0);
+	m->nc = netstatus_new(m->rtmp, 3, 0);
 	if ( NULL == m->nc )
 		goto out_free;
 
 	rtmp_set_handlers(m->rtmp, &ops, m);
 
 	if ( !invoke_connect(m, vars) )
-		goto out_free_netconn;
+		goto out_free_netstatus;
 
 	while ( m->state != MAYHEM_STATE_ABORT && rtmp_pump(m->rtmp) ) {
 		switch(m->state) {
@@ -396,8 +396,8 @@ mayhem_t mayhem_connect(wmvars_t vars)
 
 	/* success */
 	goto out;
-out_free_netconn:
-	netconn_free(m->nc);
+out_free_netstatus:
+	netstatus_free(m->nc);
 out_free:
 	free(m);
 	m = NULL;

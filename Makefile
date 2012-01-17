@@ -46,7 +46,7 @@ WMDUMP_LIBS :=
 WMDUMP_OBJ = $(OS_OBJ) \
 		cvars.o \
 		hexdump.o \
-		netconn.o \
+		netstatus.o \
 		rtmp.o \
 		amf.o \
 		flv.o \

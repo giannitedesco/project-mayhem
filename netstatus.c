@@ -1,6 +1,10 @@
 /* This file is part of wmdump
  * Copyright (c) 2011 Gianni Tedesco
  * Released under the terms of GPLv3
+ *
+ * Implements the NetStatusEvent class as documented in:
+ * http://help.adobe.com/en_US/FlashPlatform/reference/actionscript/3/flash/events/NetStatusEvent.html
+ * Specifically the NetStream and NetConnection interfaces
 */
 #include <wmdump.h>
 #include <wmvars.h>
@@ -9,9 +13,9 @@
 
 #include <rtmp/amf.h>
 #include <rtmp/rtmp.h>
-#include <rtmp/netconn.h>
+#include <rtmp/netstatus.h>
 
-struct _netconn {
+struct _netstatus {
 	rtmp_t rtmp;
 	unsigned int state;
 	unsigned int stream_id;
@@ -19,14 +23,14 @@ struct _netconn {
 	uint32_t dest;
 };
 
-struct netconn_status {
+struct netstatus_status {
 	const char *level;
 	const char *code;
 	const char *desc;
 	/* details, clientid */
 };
 
-static int rip_status(amf_t o_stat, struct netconn_status *st)
+static int rip_status(amf_t o_stat, struct netstatus_status *st)
 {
 	amf_t o_str;
 
@@ -34,14 +38,14 @@ static int rip_status(amf_t o_stat, struct netconn_status *st)
 
 	o_str = amf_object_get(o_stat, "level");
 	if ( NULL == o_str || amf_type(o_str) != AMF_STRING ) {
-		printf("netconn: bad 'level' in _result\n");
+		printf("netstatus: bad 'level' in _result\n");
 		return 0;
 	}
 	st->level = amf_get_string(o_str);
 
 	o_str = amf_object_get(o_stat, "code");
 	if ( NULL == o_str || amf_type(o_str) != AMF_STRING ) {
-		printf("netconn: bad 'code' in _result\n");
+		printf("netstatus: bad 'code' in _result\n");
 		return 0;
 	}
 	st->code = amf_get_string(o_str);
@@ -74,7 +78,7 @@ err:
 	return NULL;
 }
 
-int netconn_createstream(netconn_t nc, double num)
+int netstatus_createstream(netstatus_t nc, double num)
 {
 	invoke_t inv;
 	int ret;
@@ -85,13 +89,13 @@ int netconn_createstream(netconn_t nc, double num)
 
 	ret = rtmp_flex_invoke(nc->rtmp, nc->chan, nc->dest, inv);
 	if ( ret ) {
-		nc->state = NETCONN_STATE_CREATE_SENT;
+		nc->state = NETSTATUS_STATE_CREATE_SENT;
 	}
 	amf_invoke_free(inv);
 	return ret;
 }
 
-int netconn_play(netconn_t nc, amf_t obj)
+int netstatus_play(netstatus_t nc, amf_t obj)
 {
 	invoke_t inv;
 	int ret = 0;
@@ -113,26 +117,26 @@ int netconn_play(netconn_t nc, amf_t obj)
 
 	ret = rtmp_flex_invoke(nc->rtmp, 8, nc->stream_id, inv);
 	if ( ret ) {
-		nc->state = NETCONN_STATE_PLAY_SENT;
+		nc->state = NETSTATUS_STATE_PLAY_SENT;
 	}
 out:
 	amf_invoke_free(inv);
 	return ret;
 }
 
-void netconn_set_state(netconn_t nc, unsigned int state)
+void netstatus_set_state(netstatus_t nc, unsigned int state)
 {
 	nc->state = state;
 }
 
-unsigned int netconn_state(netconn_t nc)
+unsigned int netstatus_state(netstatus_t nc)
 {
 	return nc->state;
 }
 
-netconn_t netconn_new(rtmp_t rtmp, int chan, uint32_t dest)
+netstatus_t netstatus_new(rtmp_t rtmp, int chan, uint32_t dest)
 {
-	struct _netconn *nc;
+	struct _netstatus *nc;
 
 	nc = calloc(1, sizeof(*nc));
 	if ( NULL == nc )
@@ -146,14 +150,14 @@ out:
 	return nc;
 }
 
-static int std_result(netconn_t nc, invoke_t inv)
+static int std_result(netstatus_t nc, invoke_t inv)
 {
-	struct netconn_status st;
+	struct netstatus_status st;
 	unsigned int rc;
 	amf_t o_rc, o_stat;
 
 	if ( amf_invoke_nargs(inv) < 4 ) {
-		printf("netconn: too few args in result\n");
+		printf("netstatus: too few args in result\n");
 		return 0;
 	}
 
@@ -162,11 +166,11 @@ static int std_result(netconn_t nc, invoke_t inv)
 	o_stat = amf_invoke_get(inv, 3);
 
 	if ( amf_type(o_rc) != AMF_NUMBER ) {
-		printf("netconn: wrong type for result code\n");
+		printf("netstatus: wrong type for result code\n");
 		return 0;
 	}
 	if ( amf_type(o_stat) != AMF_OBJECT ) {
-		printf("netconn: wrong type for result object\n");
+		printf("netstatus: wrong type for result object\n");
 		return 0;
 	}
 
@@ -182,11 +186,24 @@ static int std_result(netconn_t nc, invoke_t inv)
 	printf(" desc = %s\n", st.desc);
 
 	if ( !strcmp(st.code, "NetConnection.Connect.Success") ) {
-		nc->state = NETCONN_STATE_CONNECTED;
-	}else if ( !strcmp(st.code, "NetStream.Play.Reset") ) {
-		/* what to do? */
+		nc->state = NETSTATUS_STATE_CONNECTED;
+	}else if ( !strcmp(st.code, "NetConnection.Connect.AppShutdown") ) {
+	}else if ( !strcmp(st.code, "NetConnection.Connect.Closed") ) {
+	}else if ( !strcmp(st.code, "NetConnection.Connect.Failed") ) {
+	}else if ( !strcmp(st.code, "NetConnection.Connect.IdleTimeout") ) {
+	}else if ( !strcmp(st.code, "NetConnection.Connect.InvalidApp") ) {
+	}else if ( !strcmp(st.code, "NetConnection.Connect.NetworkChange") ) {
+	}else if ( !strcmp(st.code, "NetConnection.Connect.Rejected") ) {
 	}else if ( !strcmp(st.code, "NetStream.Play.Start") ) {
-		nc->state = NETCONN_STATE_PLAYING;
+		nc->state = NETSTATUS_STATE_PLAYING;
+	}else if ( !strcmp(st.code, "NetStream.Play.Reset") ) {
+	}else if ( !strcmp(st.code, "NetStream.Play.Stop") ) {
+	}else if ( !strcmp(st.code, "NetStream.Play.UnpublishNotify") ) {
+	}else if ( !strcmp(st.code, "NetStream.Play.PublishNotify") ) {
+	}else if ( !strcmp(st.code, "NetStream.Play.StreamNotFound") ) {
+	}else if ( !strcmp(st.code, "NetStream.Play.FileStructureInvalid") ) {
+	}else if ( !strcmp(st.code, "NetStream.Play.NoSupportedTrackFound") ) {
+	}else if ( !strcmp(st.code, "NetStream.Play.Transition") ) {
 	}else if ( !strcmp(st.code, "NetStream.Play.InsufficientBW") ) {
 		/* why oh why? */
 	}
@@ -194,12 +211,12 @@ static int std_result(netconn_t nc, invoke_t inv)
 	return 1;
 }
 
-static int create_result(netconn_t nc, invoke_t inv)
+static int create_result(netstatus_t nc, invoke_t inv)
 {
 	amf_t o_rc, o_sid;
 
 	if ( amf_invoke_nargs(inv) < 4 ) {
-		printf("netconn: too few args in result\n");
+		printf("netstatus: too few args in result\n");
 		return 0;
 	}
 	o_rc = amf_invoke_get(inv, 1);
@@ -207,41 +224,41 @@ static int create_result(netconn_t nc, invoke_t inv)
 	o_sid = amf_invoke_get(inv, 3);
 
 	if ( amf_type(o_rc) != AMF_NUMBER || amf_type(o_sid) != AMF_NUMBER ) {
-		printf("netconn: create stream result: type mismatch\n");
+		printf("netstatus: create stream result: type mismatch\n");
 		return 0;
 	}
 
 	nc->stream_id = amf_get_number(o_sid);
-	printf("netconn: Stream created (%f) with id: %d\n",
+	printf("netstatus: Stream created (%f) with id: %d\n",
 		amf_get_number(o_rc), nc->stream_id);
-	nc->state = NETCONN_STATE_CREATED;
+	nc->state = NETSTATUS_STATE_CREATED;
 	return 1;
 }
 
-static int n_result(netconn_t nc, invoke_t inv)
+static int n_result(netstatus_t nc, invoke_t inv)
 {
 	switch(nc->state) {
-	case NETCONN_STATE_CONNECT_SENT:
+	case NETSTATUS_STATE_CONNECT_SENT:
 		return std_result(nc, inv);
-	case NETCONN_STATE_CREATE_SENT:
+	case NETSTATUS_STATE_CREATE_SENT:
 		return create_result(nc, inv);
 	default:
 		return 0;
 	}
 }
 
-static int n_error(netconn_t nc, invoke_t inv)
+static int n_error(netstatus_t nc, invoke_t inv)
 {
 	printf("Got an error:\n");
 	amf_invoke_pretty_print(inv);
 	return 1;
 }
 
-static int dispatch(netconn_t nc, invoke_t inv, const char *method)
+static int dispatch(netstatus_t nc, invoke_t inv, const char *method)
 {
 	static const struct {
 		const char *method;
-		int (*call)(netconn_t nc, invoke_t inv);
+		int (*call)(netstatus_t nc, invoke_t inv);
 	}tbl[] = {
 		{.method = "_result", .call = n_result},
 		{.method = "_error", .call = n_error},
@@ -259,7 +276,7 @@ static int dispatch(netconn_t nc, invoke_t inv, const char *method)
 	return 0;
 }
 
-int netconn_invoke(netconn_t nc, invoke_t inv)
+int netstatus_invoke(netstatus_t nc, invoke_t inv)
 {
 	unsigned int nargs;
 	amf_t method;
@@ -275,7 +292,7 @@ int netconn_invoke(netconn_t nc, invoke_t inv)
 	return dispatch(nc, inv, amf_get_string(method));
 }
 
-void netconn_free(netconn_t nc)
+void netstatus_free(netstatus_t nc)
 {
 	if ( nc ) {
 		free(nc);
