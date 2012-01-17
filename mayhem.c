@@ -284,24 +284,28 @@ static int notify(void *priv, struct rtmp_pkt *pkt,
 {
 	struct _mayhem *m = priv;
 	invoke_t inv;
+	amf_t a;
 
 	inv = amf_invoke_from_buf(buf, sz);
-	if ( inv ) {
-		amf_t a;
+	if ( NULL == inv )
+		return 1;
 
-		if ( amf_invoke_nargs(inv) < 1 )
-			return 1;
-		a = amf_invoke_get(inv, 0);
-		if ( NULL == a || amf_type(a) != AMF_STRING )
-			return 1;
-		if ( strcmp(amf_get_string(a), "onMetaData") )
-			return 1;
-		printf("Video metadata:\n");
-		amf_invoke_pretty_print(inv);
-		amf_invoke_free(inv);
-	}
+	if ( amf_invoke_nargs(inv) < 1 )
+		return 1;
+
+	a = amf_invoke_get(inv, 0);
+	if ( NULL == a || amf_type(a) != AMF_STRING )
+		return 1;
+
+	if ( strcmp(amf_get_string(a), "onMetaData") )
+		return 1;
+
+	printf("Video metadata:\n");
+	amf_invoke_pretty_print(inv);
+	amf_invoke_free(inv);
 
 	flv_rip(m->flv, pkt, buf, sz);
+
 	return 1;
 }
 
