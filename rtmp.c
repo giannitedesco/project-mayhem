@@ -835,8 +835,7 @@ rtmp_t rtmp_connect(const char *tcUrl)
 
 	while ( r->state != STATE_CONNECTED ) {
 		if ( !rtmp_pump(r) ) {
-			rtmp_close(r);
-			return NULL;
+			goto out_close;
 		}
 	}
 
