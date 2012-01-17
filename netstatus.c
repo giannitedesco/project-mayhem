@@ -23,14 +23,14 @@ struct _netstatus {
 	uint32_t dest;
 };
 
-struct netstatus_status {
+struct netstatus_event {
 	const char *level;
 	const char *code;
 	const char *desc;
 	/* details, clientid */
 };
 
-static int rip_status(amf_t o_stat, struct netstatus_status *st)
+static int rip_status(amf_t o_stat, struct netstatus_event *st)
 {
 	amf_t o_str;
 
@@ -78,7 +78,7 @@ err:
 	return NULL;
 }
 
-int netstatus_createstream(netstatus_t nc, double num)
+int netstatus_createstream(netstatus_t ns, double num)
 {
 	invoke_t inv;
 	int ret;
@@ -87,15 +87,15 @@ int netstatus_createstream(netstatus_t nc, double num)
 	if ( NULL == inv )
 		return 0;
 
-	ret = rtmp_flex_invoke(nc->rtmp, nc->chan, nc->dest, inv);
+	ret = rtmp_flex_invoke(ns->rtmp, ns->chan, ns->dest, inv);
 	if ( ret ) {
-		nc->state = NETSTATUS_STATE_CREATE_SENT;
+		ns->state = NETSTATUS_STATE_CREATE_SENT;
 	}
 	amf_invoke_free(inv);
 	return ret;
 }
 
-int netstatus_play(netstatus_t nc, amf_t obj)
+int netstatus_play(netstatus_t ns, amf_t obj)
 {
 	invoke_t inv;
 	int ret = 0;
@@ -115,45 +115,80 @@ int netstatus_play(netstatus_t nc, amf_t obj)
 	if ( !amf_invoke_set(inv, 3, obj) )
 		goto out;
 
-	ret = rtmp_flex_invoke(nc->rtmp, 8, nc->stream_id, inv);
+	ret = rtmp_flex_invoke(ns->rtmp, 8, ns->stream_id, inv);
 	if ( ret ) {
-		nc->state = NETSTATUS_STATE_PLAY_SENT;
+		ns->state = NETSTATUS_STATE_PLAY_SENT;
 	}
 out:
 	amf_invoke_free(inv);
 	return ret;
 }
 
-void netstatus_set_state(netstatus_t nc, unsigned int state)
+void netstatus_set_state(netstatus_t ns, unsigned int state)
 {
-	nc->state = state;
+	ns->state = state;
 }
 
-unsigned int netstatus_state(netstatus_t nc)
+unsigned int netstatus_state(netstatus_t ns)
 {
-	return nc->state;
+	return ns->state;
 }
 
 netstatus_t netstatus_new(rtmp_t rtmp, int chan, uint32_t dest)
 {
-	struct _netstatus *nc;
+	struct _netstatus *ns;
 
-	nc = calloc(1, sizeof(*nc));
-	if ( NULL == nc )
+	ns = calloc(1, sizeof(*ns));
+	if ( NULL == ns )
 		goto out;
 
-	nc->rtmp = rtmp;
-	nc->chan = chan;
-	nc->dest = dest;
+	ns->rtmp = rtmp;
+	ns->chan = chan;
+	ns->dest = dest;
 	/* success */
 out:
-	return nc;
+	return ns;
 }
 
-static int std_result(netstatus_t nc, invoke_t inv)
+static int conn_success(struct _netstatus *ns, struct netstatus_event *ev)
 {
-	struct netstatus_status st;
-	unsigned int rc;
+	ns->state = NETSTATUS_STATE_CONNECTED;
+	return 1;
+}
+
+static int play_start(struct _netstatus *ns, struct netstatus_event *ev)
+{
+	ns->state = NETSTATUS_STATE_PLAYING;
+	return 1;
+}
+
+static int std_result(netstatus_t ns, invoke_t inv)
+{
+	static const struct {
+		const char *code;
+		int (*fn)(struct _netstatus *ns, struct netstatus_event *ev);
+	}disp[] = {
+		{.code = "NetConnection.Connect.Success", .fn = conn_success },
+		{.code = "NetConnection.Connect.AppShutdown", },
+		{.code = "NetConnection.Connect.Closed",},
+		{.code = "NetConnection.Connect.Failed",},
+		{.code = "NetConnection.Connect.IdleTimeout",},
+		{.code = "NetConnection.Connect.InvalidApp",},
+		{.code = "NetConnection.Connect.NetworkChange",},
+		{.code = "NetConnection.Connect.Rejected",},
+		{.code = "NetStream.Play.Start", .fn = play_start },
+		{.code = "NetStream.Play.Reset",},
+		{.code = "NetStream.Play.Stop",},
+		{.code = "NetStream.Play.UnpublishNotify",},
+		{.code = "NetStream.Play.PublishNotify",},
+		{.code = "NetStream.Play.StreamNotFound",},
+		{.code = "NetStream.Play.FileStructureInvalid",},
+		{.code = "NetStream.Play.NoSupportedTrackFound",},
+		{.code = "NetStream.Play.Transition",},
+		{.code = "NetStream.Play.InsufficientBW",},
+	};
+	struct netstatus_event st;
+	unsigned int rc, i;
 	amf_t o_rc, o_stat;
 
 	if ( amf_invoke_nargs(inv) < 4 ) {
@@ -179,39 +214,25 @@ static int std_result(netstatus_t nc, invoke_t inv)
 	if ( !rip_status(o_stat, &st) )
 		return 0;
 
-	printf("NetConnection: result:\n");
+	printf("NetStatusEvent: result:\n");
 	printf(" rc = %d\n", rc);
 	printf(" level = %s\n", st.level);
 	printf(" code = %s\n", st.code);
 	printf(" desc = %s\n", st.desc);
 
-	if ( !strcmp(st.code, "NetConnection.Connect.Success") ) {
-		nc->state = NETSTATUS_STATE_CONNECTED;
-	}else if ( !strcmp(st.code, "NetConnection.Connect.AppShutdown") ) {
-	}else if ( !strcmp(st.code, "NetConnection.Connect.Closed") ) {
-	}else if ( !strcmp(st.code, "NetConnection.Connect.Failed") ) {
-	}else if ( !strcmp(st.code, "NetConnection.Connect.IdleTimeout") ) {
-	}else if ( !strcmp(st.code, "NetConnection.Connect.InvalidApp") ) {
-	}else if ( !strcmp(st.code, "NetConnection.Connect.NetworkChange") ) {
-	}else if ( !strcmp(st.code, "NetConnection.Connect.Rejected") ) {
-	}else if ( !strcmp(st.code, "NetStream.Play.Start") ) {
-		nc->state = NETSTATUS_STATE_PLAYING;
-	}else if ( !strcmp(st.code, "NetStream.Play.Reset") ) {
-	}else if ( !strcmp(st.code, "NetStream.Play.Stop") ) {
-	}else if ( !strcmp(st.code, "NetStream.Play.UnpublishNotify") ) {
-	}else if ( !strcmp(st.code, "NetStream.Play.PublishNotify") ) {
-	}else if ( !strcmp(st.code, "NetStream.Play.StreamNotFound") ) {
-	}else if ( !strcmp(st.code, "NetStream.Play.FileStructureInvalid") ) {
-	}else if ( !strcmp(st.code, "NetStream.Play.NoSupportedTrackFound") ) {
-	}else if ( !strcmp(st.code, "NetStream.Play.Transition") ) {
-	}else if ( !strcmp(st.code, "NetStream.Play.InsufficientBW") ) {
-		/* why oh why? */
+	for(i = 0; i < ARRAY_SIZE(disp); i++) {
+		if ( strcmp(disp[i].code, st.code) )
+			continue;
+		if ( disp[i].fn )
+			return (*disp[i].fn)(ns, &st);
+		return 1;
 	}
 
+	printf(" UNHANDLED CODE\n");
 	return 1;
 }
 
-static int create_result(netstatus_t nc, invoke_t inv)
+static int create_result(netstatus_t ns, invoke_t inv)
 {
 	amf_t o_rc, o_sid;
 
@@ -228,37 +249,37 @@ static int create_result(netstatus_t nc, invoke_t inv)
 		return 0;
 	}
 
-	nc->stream_id = amf_get_number(o_sid);
+	ns->stream_id = amf_get_number(o_sid);
 	printf("netstatus: Stream created (%f) with id: %d\n",
-		amf_get_number(o_rc), nc->stream_id);
-	nc->state = NETSTATUS_STATE_CREATED;
+		amf_get_number(o_rc), ns->stream_id);
+	ns->state = NETSTATUS_STATE_CREATED;
 	return 1;
 }
 
-static int n_result(netstatus_t nc, invoke_t inv)
+static int n_result(netstatus_t ns, invoke_t inv)
 {
-	switch(nc->state) {
+	switch(ns->state) {
 	case NETSTATUS_STATE_CONNECT_SENT:
-		return std_result(nc, inv);
+		return std_result(ns, inv);
 	case NETSTATUS_STATE_CREATE_SENT:
-		return create_result(nc, inv);
+		return create_result(ns, inv);
 	default:
 		return 0;
 	}
 }
 
-static int n_error(netstatus_t nc, invoke_t inv)
+static int n_error(netstatus_t ns, invoke_t inv)
 {
 	printf("Got an error:\n");
 	amf_invoke_pretty_print(inv);
 	return 1;
 }
 
-static int dispatch(netstatus_t nc, invoke_t inv, const char *method)
+static int dispatch(netstatus_t ns, invoke_t inv, const char *method)
 {
 	static const struct {
 		const char *method;
-		int (*call)(netstatus_t nc, invoke_t inv);
+		int (*call)(netstatus_t ns, invoke_t inv);
 	}tbl[] = {
 		{.method = "_result", .call = n_result},
 		{.method = "_error", .call = n_error},
@@ -269,14 +290,14 @@ static int dispatch(netstatus_t nc, invoke_t inv, const char *method)
 	for(i = 0; i < ARRAY_SIZE(tbl); i++) {
 		if ( strcmp(tbl[i].method, method) )
 			continue;
-		if ( !(*tbl[i].call)(nc, inv) )
+		if ( !(*tbl[i].call)(ns, inv) )
 			return -1;
 		return 1;
 	}
 	return 0;
 }
 
-int netstatus_invoke(netstatus_t nc, invoke_t inv)
+int netstatus_invoke(netstatus_t ns, invoke_t inv)
 {
 	unsigned int nargs;
 	amf_t method;
@@ -289,12 +310,12 @@ int netstatus_invoke(netstatus_t nc, invoke_t inv)
 	if ( NULL == method || amf_type(method) != AMF_STRING )
 		return -1;
 
-	return dispatch(nc, inv, amf_get_string(method));
+	return dispatch(ns, inv, amf_get_string(method));
 }
 
-void netstatus_free(netstatus_t nc)
+void netstatus_free(netstatus_t ns)
 {
-	if ( nc ) {
-		free(nc);
+	if ( ns ) {
+		free(ns);
 	}
 }

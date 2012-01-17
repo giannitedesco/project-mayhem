@@ -27,7 +27,7 @@
 struct _mayhem {
 	char *bitch;
 	rtmp_t rtmp;
-	netstatus_t nc;
+	netstatus_t ns;
 	FILE *flv;
 	unsigned int state;
 	unsigned int sid;
@@ -211,7 +211,7 @@ static int dispatch(void *priv, invoke_t inv)
 		return 1;
 
 	/* ret == 0, means unhandled, lets try netstatus */
-	ret = netstatus_invoke(m->nc, inv);
+	ret = netstatus_invoke(m->ns, inv);
 	if ( ret < 0 )
 		return 0;
 	if ( !ret )
@@ -220,7 +220,7 @@ static int dispatch(void *priv, invoke_t inv)
 	/* TODO: We may need to handle netstatus status and reflect it
 	 * in overall application state
 	*/
-	switch(netstatus_state(m->nc)) {
+	switch(netstatus_state(m->ns)) {
 	case NETSTATUS_STATE_CREATED:
 		m->state = MAYHEM_STATE_GOT_STREAM;
 		break;
@@ -245,7 +245,7 @@ static int invoke_connect(struct _mayhem *m, struct _wmvars *v)
 	ret = rtmp_invoke(m->rtmp, 3, 0, inv);
 	if ( ret ) {
 		m->state = MAYHEM_STATE_CONNECTING;
-		netstatus_set_state(m->nc, NETSTATUS_STATE_CONNECT_SENT);
+		netstatus_set_state(m->ns, NETSTATUS_STATE_CONNECT_SENT);
 	}
 	amf_invoke_free(inv);
 out:
@@ -254,16 +254,16 @@ out:
 
 static int create_stream(struct _mayhem *m, double num)
 {
-	if (netstatus_state(m->nc) == NETSTATUS_STATE_CONNECTED) {
-		return netstatus_createstream(m->nc, 2.0);
+	if (netstatus_state(m->ns) == NETSTATUS_STATE_CONNECTED) {
+		return netstatus_createstream(m->ns, 2.0);
 	}
 	return 1;
 }
 
 static int play(struct _mayhem *m)
 {
-	if (netstatus_state(m->nc) == NETSTATUS_STATE_CREATED ) {
-		return netstatus_play(m->nc, amf_stringf("%d", m->sid));
+	if (netstatus_state(m->ns) == NETSTATUS_STATE_CREATED ) {
+		return netstatus_play(m->ns, amf_stringf("%d", m->sid));
 	}
 	return 1;
 }
@@ -273,7 +273,7 @@ void mayhem_close(mayhem_t m)
 	if ( m ) {
 		flv_close(m->flv);
 		free(m->bitch);
-		netstatus_free(m->nc);
+		netstatus_free(m->ns);
 		rtmp_close(m->rtmp);
 		free(m);
 	}
@@ -361,8 +361,8 @@ mayhem_t mayhem_connect(wmvars_t vars)
 	if ( NULL == m->rtmp )
 		goto out_free;
 
-	m->nc = netstatus_new(m->rtmp, 3, 0);
-	if ( NULL == m->nc )
+	m->ns = netstatus_new(m->rtmp, 3, 0);
+	if ( NULL == m->ns )
 		goto out_free;
 
 	rtmp_set_handlers(m->rtmp, &ops, m);
@@ -397,7 +397,7 @@ mayhem_t mayhem_connect(wmvars_t vars)
 	/* success */
 	goto out;
 out_free_netstatus:
-	netstatus_free(m->nc);
+	netstatus_free(m->ns);
 out_free:
 	free(m);
 	m = NULL;
