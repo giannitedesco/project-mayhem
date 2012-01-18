@@ -443,6 +443,7 @@ void amf_invoke_to_buf(invoke_t inv, uint8_t *buf)
 static struct _amf *parse_element(const uint8_t *buf, size_t sz, size_t *taken)
 {
 	const uint8_t *ptr = buf, *end = buf + sz;
+	size_t tmp;
 	uint8_t type;
 	uint16_t slen;
 	struct _amf *ret;
@@ -476,16 +477,22 @@ static struct _amf *parse_element(const uint8_t *buf, size_t sz, size_t *taken)
 		ret = amf_stringf("%.*s", slen, ptr);
 		ptr += slen;
 		break;
+	case AMF_AVMPLUS:
+		tmp = 0;
+		ret = amf3_parse(ptr, end - ptr, &tmp);
+		ptr += tmp;
+		break;
 	case AMF_ECMA_ARRAY:
 		if ( ptr + 4 > end )
 			return NULL;
 		ptr += 4;
 	case AMF_OBJECT:
 		ret = amf_object();
+		if ( NULL == ret )
+			break;
 		do {
 			struct _amf *elem;
 			char *name;
-			size_t t;
 
 			if ( ptr + 2 >= end )
 				return NULL;
@@ -514,7 +521,8 @@ static struct _amf *parse_element(const uint8_t *buf, size_t sz, size_t *taken)
 				break;
 			}
 
-			elem = parse_element(ptr, end - ptr, &t);
+			tmp = 0;
+			elem = parse_element(ptr, end - ptr, &tmp);
 			if ( NULL == elem ) {
 				free(name);
 				amf_free(ret);
@@ -527,7 +535,7 @@ static struct _amf *parse_element(const uint8_t *buf, size_t sz, size_t *taken)
 				return NULL;
 			}
 
-			ptr += t;
+			ptr += tmp;
 		}while(*ptr != AMF_OBJECT_END);
 		ptr++;
 		break;
