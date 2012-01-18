@@ -203,6 +203,7 @@ static int user_parse(amf_t obj, struct user *usr)
 static int i_userlist(mayhem_t m, invoke_t inv)
 {
 	unsigned int i, nargs;
+	static int done;
 	amf_t obj;
 
 	nargs = amf_invoke_nargs(inv);
@@ -210,6 +211,9 @@ static int i_userlist(mayhem_t m, invoke_t inv)
 		printf("mayhem: too few args in NaiadUserList\n");
 		return 0;
 	}
+
+	if ( !done )
+		return 1;
 
 	printf("mayhem: user list\n");
 
@@ -233,6 +237,7 @@ static int i_userlist(mayhem_t m, invoke_t inv)
 		printf(" - %s ('%s')\n", usr.name, usr.id);
 	}
 
+	done = 1;
 	return 1;
 }
 

@@ -13,14 +13,18 @@ NetStatus cleanups:
    - NetStream.Play.*
  - should make mayhem.c a lot tider
 
-AMF parsing:
- - Sometimes we get shit like CR or NUL in strings (eg. roomtopic)
- - Will we need more complete AMF3 parsing in practice? doesn't look like it
-
 Timestamp generation and bandwidth management:
  - Use real timestamps in rtmp code, where necessary
 
-Flesh out stubbed out handlers:
- - mostly naiad* in mayhem.c
+Handle gold show status changes
 
 Test with legit account details on paid show
+
+Proper userlist management
+
+Decode HTML entities in chat
+
+AMF parsing:
+ - Sometimes we get shit like CR or NUL in strings (eg. roomtopic)
+ - Will we need more complete AMF3 parsing in practice? doesn't look like it
+ - Nicer way to handle NaiadCheckup calls?
