@@ -29,6 +29,7 @@ struct rtmp_chan {
 	uint8_t *p_cur;
 	size_t p_left;
 
+	uint32_t cur_ts;
 	uint32_t ts;
 	uint32_t sz;
 	uint32_t dest;
@@ -514,10 +515,10 @@ static ssize_t decode_rtmp(struct _rtmp *r, const uint8_t *buf, size_t sz)
 	nsz = sizes[type];
 
 	if ( nsz >= 4 ) {
-		cur_ts = decode_int24(ptr);
+		cur_ts = pkt->cur_ts = decode_int24(ptr);
 		ptr += 3;
 	}else{
-		cur_ts = 0;
+		cur_ts = pkt->cur_ts;
 	}
 
 	if ( nsz >= 8 ) {
@@ -534,7 +535,7 @@ static ssize_t decode_rtmp(struct _rtmp *r, const uint8_t *buf, size_t sz)
 	}
 
 	if ( cur_ts == 0xffffff ) {
-		cur_ts = decode_int32(ptr);
+		cur_ts = pkt->cur_ts = decode_int32(ptr);
 		ptr += 4;
 	}
 
@@ -564,11 +565,7 @@ static ssize_t decode_rtmp(struct _rtmp *r, const uint8_t *buf, size_t sz)
 		(pkt->p_cur - pkt->p_buf));
 
 	if ( !pkt->p_left ) {
-		if ( nsz < 12 ) {
-			pkt->ts += cur_ts;
-		}else{
-			pkt->ts = cur_ts;
-		}
+		pkt->ts += cur_ts;
 
 		rtmp_dispatch(r, chan, pkt->dest, pkt->ts, pkt->type,
 				pkt->p_buf, pkt->p_cur - pkt->p_buf);

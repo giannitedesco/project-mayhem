@@ -8,6 +8,7 @@
 
 #include <rtmp/amf.h>
 #include <rtmp/rtmp.h>
+#include <rtmp/proto.h>
 
 #include <flv.h>
 
@@ -43,6 +44,19 @@ void flv_rip(FILE *f, struct rtmp_pkt *pkt, const uint8_t *buf, size_t sz)
 		return;
 	if ( !sz )
 		return;
+
+	switch(pkt->type) {
+	case RTMP_MSG_AUDIO:
+		if ( sz <= 2 )
+			return;
+		break;
+	case RTMP_MSG_VIDEO:
+		if ( sz <= 6 )
+			return;
+		break;
+	default:
+		break;
+	}
 
 	memset(&tag, 0, sizeof(tag));
 	tag.type = pkt->type;
