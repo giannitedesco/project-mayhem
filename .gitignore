@@ -1,6 +1,8 @@
 .*.d
 *.o
-wmdump
-wmpdump.exe
+mayhem
+mayhem.exe
+amfparse
+amfparse.exe
 Config.mak
 .*.swp
