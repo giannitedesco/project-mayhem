@@ -5,6 +5,7 @@
 #ifndef _MAYHEM_AMF_INTERNAL_H
 #define _MAYHEM_AMF_INTERNAL_H
 
-invoke_t mayhem_amf_invoke(struct _wmvars *v);
+invoke_t mayhem_amf_connect(struct _wmvars *v);
+invoke_t mayhem_amf_start(void);
 
 #endif /* _MAYHEM_AMF_INTERNAL_H */

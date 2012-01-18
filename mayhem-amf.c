@@ -13,8 +13,43 @@
 #include "mayhem-amf.h"
 
 #define SWF_URL "http://www.naiadsystems.com/flash/generic/20111122/avchat.swf"
+#define APP_VERS 7.0
 
-invoke_t mayhem_amf_invoke(struct _wmvars *v)
+invoke_t mayhem_amf_start(void)
+{
+	invoke_t inv;
+	amf_t obj;
+
+	inv = amf_invoke_new(6);
+	if ( NULL == inv )
+		return NULL;
+
+	if ( !amf_invoke_append(inv, amf_string("NaiadStart")) )
+		goto err;
+	if ( !amf_invoke_append(inv, amf_number(0.0)) )
+		goto err;
+	if ( !amf_invoke_append(inv, amf_null()) )
+		goto err;
+	if ( !amf_invoke_append(inv, amf_number(19.0)) )
+		goto err;
+	if ( !amf_invoke_append(inv, amf_number(APP_VERS)) )
+		goto err;
+
+	obj = amf_object();
+	if ( !amf_object_set(obj, "flags", amf_number(0.0)) )
+		goto err_obj;
+	if ( !amf_invoke_append(inv, obj) )
+		goto err;
+
+	return inv;
+err_obj:
+	amf_free(obj);
+err:
+	amf_invoke_free(inv);
+	return NULL;
+}
+
+invoke_t mayhem_amf_connect(struct _wmvars *v)
 {
 	invoke_t inv;
 	amf_t obj;

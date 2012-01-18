@@ -239,10 +239,27 @@ static int invoke_connect(struct _mayhem *m, struct _wmvars *v)
 {
 	invoke_t inv;
 	int ret = 0;
-	inv = mayhem_amf_invoke(v);
+	inv = mayhem_amf_connect(v);
 	if ( NULL == inv )
 		goto out;
 	ret = rtmp_invoke(m->rtmp, 3, 0, inv);
+	if ( ret ) {
+		m->state = MAYHEM_STATE_CONNECTING;
+		netstatus_set_state(m->ns, NETSTATUS_STATE_CONNECT_SENT);
+	}
+	amf_invoke_free(inv);
+out:
+	return ret;
+}
+
+static int invoke_start(struct _mayhem *m)
+{
+	invoke_t inv;
+	int ret = 0;
+	inv = mayhem_amf_start();
+	if ( NULL == inv )
+		goto out;
+	ret = rtmp_flex_invoke(m->rtmp, 3, 0, inv);
 	if ( ret ) {
 		m->state = MAYHEM_STATE_CONNECTING;
 		netstatus_set_state(m->ns, NETSTATUS_STATE_CONNECT_SENT);
@@ -303,6 +320,8 @@ static int notify(void *priv, struct rtmp_pkt *pkt,
 	printf("Video metadata:\n");
 	amf_invoke_pretty_print(inv);
 	amf_invoke_free(inv);
+
+	invoke_start(m);
 
 	flv_rip(m->flv, pkt, buf, sz);
 

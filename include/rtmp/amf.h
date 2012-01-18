@@ -16,6 +16,7 @@ typedef struct _amf *amf_t;
 #define AMF_UNDEFINED		6
 #define AMF_ECMA_ARRAY		8
 #define AMF_OBJECT_END		9
+#define AMF_STRICT_ARRAY	10
 #define AMF_AVMPLUS		17
 
 amf_t amf_number(double num);
