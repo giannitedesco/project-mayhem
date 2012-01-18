@@ -155,6 +155,105 @@ static int i_freeze(mayhem_t m, invoke_t inv)
 				NULL, -1, amf_get_string(o_desc));
 }
 
+struct user {
+	unsigned int flags;
+	const char *id;
+	const char *name;
+};
+
+static int user_parse(amf_t obj, struct user *usr)
+{
+	amf_t o_flags, o_id, o_name;
+
+	if ( NULL == obj || amf_type(obj) != AMF_OBJECT )
+		return 0;
+
+	memset(usr, 0, sizeof(*usr));
+
+	o_flags = amf_object_get(obj, "flags");
+	o_id = amf_object_get(obj, "id");
+	o_name = amf_object_get(obj, "userName");
+
+	if ( NULL == o_id || NULL == o_name ) {
+		printf("mayhem: missing element of user object\n");
+		return 0;
+	}
+
+	if ( (o_flags && amf_type(o_flags) != AMF_NUMBER) ||
+		amf_type(o_id) != AMF_STRING ) {
+		printf("mayhem: type mismatch in user object\n");
+		return 0;
+	}
+
+	if ( o_flags )
+		usr->flags = amf_get_number(o_flags);
+	usr->id = amf_get_string(o_id);
+
+	/* can be null or undefined */
+	if ( amf_type(o_name) == AMF_STRING )
+		usr->name = amf_get_string(o_name);
+
+	return 1;
+}
+
+static int i_userlist(mayhem_t m, invoke_t inv)
+{
+	unsigned int i, nargs;
+	amf_t obj;
+
+	nargs = amf_invoke_nargs(inv);
+	if ( nargs < 5 ) {
+		printf("mayhem: too few args in NaiadUserList\n");
+		return 0;
+	}
+
+	printf("mayhem: user list\n");
+
+	obj = amf_invoke_get(inv, nargs - 1);
+	if ( obj && amf_type(obj) == AMF_OBJECT ) {
+		amf_t ac;
+		ac = amf_object_get(obj, "ac");
+		if ( ac && amf_type(ac) == AMF_NUMBER ) {
+			printf(" ac = %f\n", amf_get_number(ac));
+		}
+	}
+
+	for(i = 0; i < nargs - 5; i++) {
+		struct user usr;
+		amf_t obj;
+
+		obj = amf_invoke_get(inv, 3 + i);
+		if ( !user_parse(obj, &usr) )
+			continue;
+
+		printf(" - %s ('%s')\n", usr.name, usr.id);
+	}
+
+	return 1;
+}
+
+static int i_chat(mayhem_t m, invoke_t inv)
+{
+	amf_t user, chat;
+
+	if ( amf_invoke_nargs(inv) < 6 ) {
+		printf("mayhem: too few args in NaiadAddChat\n");
+		return 0;
+	}
+
+	user = amf_invoke_get(inv, 4);
+	chat = amf_invoke_get(inv, 5);
+	if ( NULL == user || NULL == chat )
+		return 0;
+	if ( amf_type(user) != AMF_STRING || amf_type(chat) != AMF_STRING )
+		return 0;
+
+	printf("mayhem: chat: <%s> %s\n",
+		amf_get_string(user),
+		amf_get_string(chat));
+	return 1;
+}
+
 /* NaiadPledgeGold(number, null, {.amount = number, .status = number} */
 /* NaiadAddChat(number, nll, number, string, string chat, bool, bool, bool,
  *		string, object, { .flags = number, .goldamtstr = number }
@@ -168,9 +267,9 @@ static int naiad_dispatch(mayhem_t m, invoke_t inv, const char *method)
 	}tbl[] = {
 		{.method = "NaiadFreeze", .call = i_freeze},
 		{.method = "NaiadAuthorized", .call = i_auth},
-		/* NaiadUserList */
+		{.method = "NaiadUserList", .call = i_userlist},
+		{.method = "NaiadAddChat", .call = i_chat},
 		/* NaiadPledgeGold */
-		/* NaiadAddChat */
 		/* NaiadPreGoldShow */
 		/* NaiadGoldShow */
 	};

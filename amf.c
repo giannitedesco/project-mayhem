@@ -584,7 +584,6 @@ static struct _amf *parse_element(const uint8_t *buf, size_t sz, size_t *taken)
 			return NULL;
 		alen = decode_int32(ptr);
 		ptr += sizeof(alen);
-		printf("%d items\n", alen);
 		ret = amf_array(alen);
 		for(i = 0; i < alen; i++) {
 			struct _amf *elem;

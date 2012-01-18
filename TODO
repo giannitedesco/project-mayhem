@@ -15,7 +15,6 @@ NetStatus cleanups:
 
 AMF parsing:
  - Sometimes we get shit like CR or NUL in strings (eg. roomtopic)
- - NaiadUserList messages don't parse
  - Will we need more complete AMF3 parsing in practice? doesn't look like it
 
 Timestamp generation and bandwidth management:
