@@ -132,7 +132,7 @@ static size_t amf3_prop(const uint8_t *buf, size_t sz,
 	case AMF3_ARRAY:
 	case AMF3_BYTEARRAY:
 	default:
-		printf("amf: Unhandled: %d (0x%x)\n", type, type);
+		printf("amf3: Unhandled: %d (0x%x)\n", type, type);
 		hex_dump(buf, sz, 16);
 		ret = ptr - end;
 		*amf = amf_undefined();
