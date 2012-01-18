@@ -234,7 +234,7 @@ static int std_result(netstatus_t ns, invoke_t inv)
 
 static int create_result(netstatus_t ns, invoke_t inv)
 {
-	amf_t o_rc, o_sid;
+	amf_t o_rc, o_id;
 
 	if ( amf_invoke_nargs(inv) < 4 ) {
 		printf("netstatus: too few args in result\n");
@@ -242,14 +242,14 @@ static int create_result(netstatus_t ns, invoke_t inv)
 	}
 	o_rc = amf_invoke_get(inv, 1);
 	/* arg[2] is null? */
-	o_sid = amf_invoke_get(inv, 3);
+	o_id = amf_invoke_get(inv, 3);
 
-	if ( amf_type(o_rc) != AMF_NUMBER || amf_type(o_sid) != AMF_NUMBER ) {
+	if ( amf_type(o_rc) != AMF_NUMBER || amf_type(o_id) != AMF_NUMBER ) {
 		printf("netstatus: create stream result: type mismatch\n");
 		return 0;
 	}
 
-	ns->stream_id = amf_get_number(o_sid);
+	ns->stream_id = amf_get_number(o_id);
 	printf("netstatus: Stream created (%f) with id: %d\n",
 		amf_get_number(o_rc), ns->stream_id);
 	ns->state = NETSTATUS_STATE_CREATED;
@@ -268,10 +268,9 @@ static int n_result(netstatus_t ns, invoke_t inv)
 	}
 }
 
-static int n_error(netstatus_t ns, invoke_t inv)
+static int conn_close(netstatus_t ns, invoke_t inv)
 {
-	printf("Got an error:\n");
-	amf_invoke_pretty_print(inv);
+	printf("netstatus: close\n");
 	return 1;
 }
 
@@ -284,6 +283,7 @@ static int dispatch(netstatus_t ns, invoke_t inv, const char *method)
 		{.method = "_result", .call = n_result},
 		{.method = "_error", .call = std_result},
 		{.method = "onStatus", .call = std_result},
+		{.method = "close", .call = conn_close},
 	};
 	unsigned int i;
 
