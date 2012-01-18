@@ -449,7 +449,7 @@ typedef int (*rmsg_t)(struct _rtmp *r, struct rtmp_pkt *pkt,
 static int rtmp_dispatch(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 			 uint8_t type, const uint8_t *buf, size_t sz)
 {
-	rmsg_t tbl[] = {
+	static const rmsg_t tbl[] = {
 		[RTMP_MSG_CHUNK_SZ] r_chunksz,
 		[RTMP_MSG_CTL] r_ctl,
 		[RTMP_MSG_SERVER_BW] r_server_bw,
