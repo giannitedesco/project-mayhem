@@ -19,8 +19,6 @@ AMF parsing:
 
 Timestamp generation and bandwidth management:
  - Use real timestamps in rtmp code, where necessary
- - Something funky going on with our buffer management? Or why do we keep
-   getting timeout messages when things appear to be going fine?
 
 Flesh out stubbed out handlers:
  - mostly naiad* in mayhem.c

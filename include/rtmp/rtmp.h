@@ -26,6 +26,7 @@ struct rtmp_ops {
 	int(*video)(void *priv, struct rtmp_pkt *pkt,
 			const uint8_t *buf, size_t len);
 	int(*stream_start)(void *priv);
+	void(*read_report_sent)(void *priv, uint32_t ts);
 };
 
 rtmp_t rtmp_connect(const char *tcUrl);
@@ -34,5 +35,9 @@ int rtmp_flex_invoke(rtmp_t r, int chan, uint32_t dest, invoke_t inv);
 void rtmp_set_handlers(rtmp_t r, const struct rtmp_ops *ops, void *priv);
 int rtmp_pump(rtmp_t r);
 void rtmp_close(rtmp_t r);
+
+/* die die die */
+int rtmp_send(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
+			uint8_t type, const uint8_t *pkt, size_t len);
 
 #endif /* _RTMP__H */

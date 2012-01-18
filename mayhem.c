@@ -8,6 +8,7 @@
 
 #include <rtmp/amf.h>
 #include <rtmp/rtmp.h>
+#include <rtmp/proto.h>
 #include <rtmp/netstatus.h>
 #include <flv.h>
 
@@ -458,6 +459,22 @@ static int stream_start(void *priv)
 	return 1;
 }
 
+/* Send NaiadCheckup(), sigh, the problem is the last four bytes is some weird
+ * kind of AMF3 object that we can't create with our AMF API
+*/
+static void checkup(void *priv, uint32_t ts)
+{
+	struct _mayhem *m = priv;
+	static const uint8_t buf[] = {
+		0x00, 0x02, 0x00, 0x0c, 0x4e, 0x61, 0x69, 0x61,
+		0x64, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x75, 0x70,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x05, 0x11, 0x09, 0x01, 0x01
+	};
+	rtmp_send(m->rtmp, 3, 0, ts,
+			RTMP_MSG_FLEX_MESSAGE, buf, sizeof(buf));
+}
+
 mayhem_t mayhem_connect(wmvars_t vars)
 {
 	struct _mayhem *m;
@@ -467,6 +484,7 @@ mayhem_t mayhem_connect(wmvars_t vars)
 		.audio = rip,
 		.video = rip,
 		.stream_start = stream_start,
+		.read_report_sent = checkup,
 	};
 
 	m = calloc(1, sizeof(*m));

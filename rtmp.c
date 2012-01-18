@@ -129,7 +129,7 @@ static size_t hdr_small(uint8_t *buf, int chan, uint32_t dest, uint32_t ts,
 	return encode_chan(buf, 3, chan);
 }
 
-static int rtmp_send(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
+int rtmp_send(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 			uint8_t type, const uint8_t *pkt, size_t len)
 {
 	uint8_t buf[RTMP_HDR_MAX_SZ + r->chunk_sz];
@@ -189,6 +189,9 @@ static int send_read_report(struct _rtmp *r)
 	if ( ret ) {
 		r->nbytes_update = r->nbytes;
 	}
+
+	if ( r->ev_ops && r->ev_ops->read_report_sent )
+		(*r->ev_ops->read_report_sent)(r->ev_priv, ugh);
 	return 1;
 }
 static int send_ctl(struct _rtmp *r, uint16_t type, uint32_t val, uint32_t ts)

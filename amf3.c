@@ -173,6 +173,9 @@ struct _amf *amf3_parse(const uint8_t *buf, size_t sz, size_t *taken)
 
 	if ( *ptr != AMF3_OBJECT ) {
 		printf("amf3: object doesn't begin with object tag\n");
+		printf("%x %x\n", *ptr, AMF3_OBJECT);
+		*taken = sz;
+		return amf_null();
 		goto out;
 	}
 
