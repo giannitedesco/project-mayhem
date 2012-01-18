@@ -197,6 +197,9 @@ static int user_parse(amf_t obj, struct user *usr)
 	return 1;
 }
 
+/* These are weird, we seem to get empty ones, don't know what 'ac' means,
+ * must be incrementally updated somehow.
+*/
 static int i_userlist(mayhem_t m, invoke_t inv)
 {
 	unsigned int i, nargs;
@@ -233,6 +236,9 @@ static int i_userlist(mayhem_t m, invoke_t inv)
 	return 1;
 }
 
+/* NaiadAddChat(number, nll, number, string, string chat, bool, bool, bool,
+ *		string, object, { .flags = number, .goldamtstr = number }
+ */
 static int i_chat(mayhem_t m, invoke_t inv)
 {
 	amf_t user, chat;
@@ -256,9 +262,32 @@ static int i_chat(mayhem_t m, invoke_t inv)
 }
 
 /* NaiadPledgeGold(number, null, {.amount = number, .status = number} */
-/* NaiadAddChat(number, nll, number, string, string chat, bool, bool, bool,
- *		string, object, { .flags = number, .goldamtstr = number }
- */
+static int i_gold(mayhem_t m, invoke_t inv)
+{
+	amf_t obj, amt, status;
+	unsigned int a = 0, s = 0;
+
+	if ( amf_invoke_nargs(inv) < 4 ) {
+		printf("mayhem: too few args in NaiadPledgeGold\n");
+		return 0;
+	}
+
+	obj = amf_invoke_get(inv, 3);
+	if ( NULL == obj || amf_type(obj) != AMF_OBJECT ) {
+		printf("mayhem: bad argument\n");
+		return 0;
+	}
+
+	amt = amf_object_get(obj, "amount");
+	status = amf_object_get(obj, "status");
+	if ( amt && amf_type(amt) == AMF_NUMBER )
+		a = amf_get_number(amt);
+	if ( status && amf_type(status) == AMF_NUMBER )
+		s = amf_get_number(status);
+
+	printf("mayhem: gold pledged: %d (flags = %d)\n", a / 100, s);
+	return 1;
+}
 
 static int naiad_dispatch(mayhem_t m, invoke_t inv, const char *method)
 {
@@ -270,7 +299,7 @@ static int naiad_dispatch(mayhem_t m, invoke_t inv, const char *method)
 		{.method = "NaiadAuthorized", .call = i_auth},
 		{.method = "NaiadUserList", .call = i_userlist},
 		{.method = "NaiadAddChat", .call = i_chat},
-		/* NaiadPledgeGold */
+		{.method = "NaiadPledgeGold", .call = i_gold},
 		/* NaiadPreGoldShow */
 		/* NaiadGoldShow */
 	};
