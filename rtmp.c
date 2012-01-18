@@ -195,6 +195,7 @@ static int send_read_report(struct _rtmp *r)
 		(*r->ev_ops->read_report_sent)(r->ev_priv, ugh);
 	return 1;
 }
+
 static int send_ctl(struct _rtmp *r, uint16_t type, uint32_t val, uint32_t ts)
 {
 	uint8_t buf[6];
@@ -271,10 +272,11 @@ static int handshake1(struct _rtmp *r)
 	for(i = 1; i < sizeof(buf); i++)
 		buf[i] = rand();
 
+	/* version */
 	buf[5] = 0x00;
 	buf[6] = 0x00;
 	buf[7] = 0x07;
-	buf[7] = 0x02;
+	buf[8] = 0x02;
 
 	if ( !rtmp_send_raw(r, buf, sizeof(buf)) )
 		return 0;
