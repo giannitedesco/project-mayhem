@@ -30,6 +30,12 @@ amf_t amf_object(void);
 int amf_object_set(amf_t a, const char *name, amf_t obj);
 amf_t amf_object_get(amf_t a, const char *name);
 
+/* These are of type AMF_STRICT_ARRAY and NOT AMF_ECMA_ARRAY */
+amf_t amf_array(size_t nmemb);
+int amf_array_set(amf_t a, unsigned int idx, amf_t val);
+amf_t amf_array_get(amf_t a, unsigned int idx);
+unsigned int amf_array_size(amf_t a);
+
 unsigned int amf_type(amf_t a);
 double amf_get_number(amf_t a);
 int amf_get_bool(amf_t a);

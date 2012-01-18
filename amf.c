@@ -145,7 +145,44 @@ amf_t amf_object(void)
 	return a;
 }
 
+amf_t amf_array(size_t nmemb)
+{
+	struct _amf *a;
+	a = amf_alloc(AMF_STRICT_ARRAY);
+	if ( NULL == a )
+		return NULL;
+	a->u.obj.nmemb = nmemb;
+	a->u.obj.elem = calloc(nmemb, sizeof(*a->u.obj.elem));
+	if ( NULL == a->u.obj.elem ) {
+		amf_free(a);
+		return NULL;
+	}
+	return a;
+}
+
+int amf_array_set(amf_t a, unsigned int idx, amf_t val)
+{
+	assert(a->type == AMF_STRICT_ARRAY);
+	assert(idx < a->u.obj.nmemb);
+	a->u.obj.elem[idx].val = val;
+	return 1;
+}
+
+amf_t amf_array_get(amf_t a, unsigned int idx)
+{
+	assert(a->type == AMF_STRICT_ARRAY);
+	assert(idx < a->u.obj.nmemb);
+	return a->u.obj.elem[idx].val;
+}
+
+unsigned int amf_array_size(amf_t a)
+{
+	assert(a->type == AMF_STRICT_ARRAY);
+	return a->u.obj.nmemb;
+}
+
 static int object_index(amf_t a, const char *name)
+
 {
 	unsigned int i;
 	assert(a->type == AMF_OBJECT);
@@ -212,6 +249,7 @@ void amf_free(amf_t a)
 			free(a->u.str);
 			break;
 		case AMF_OBJECT:
+		case AMF_STRICT_ARRAY:
 			for(i = 0; i < a->u.obj.nmemb; i++) {
 				free(a->u.obj.elem[i].key);
 				amf_free(a->u.obj.elem[i].val);
@@ -447,6 +485,7 @@ static struct _amf *parse_element(const uint8_t *buf, size_t sz, size_t *taken)
 	uint8_t type;
 	uint16_t slen;
 	struct _amf *ret;
+	uint32_t alen, i;
 
 	assert(sz);
 
@@ -530,6 +569,7 @@ static struct _amf *parse_element(const uint8_t *buf, size_t sz, size_t *taken)
 			}
 
 			if ( !amf_object_set(ret, name, elem) ) {
+				amf_free(elem);
 				free(name);
 				amf_free(ret);
 				return NULL;
@@ -538,6 +578,28 @@ static struct _amf *parse_element(const uint8_t *buf, size_t sz, size_t *taken)
 			ptr += tmp;
 		}while(*ptr != AMF_OBJECT_END);
 		ptr++;
+		break;
+	case AMF_STRICT_ARRAY:
+		if ( ptr + sizeof(alen) > end )
+			return NULL;
+		alen = decode_int32(ptr);
+		ptr += sizeof(alen);
+		printf("%d items\n", alen);
+		ret = amf_array(alen);
+		for(i = 0; i < alen; i++) {
+			struct _amf *elem;
+			elem = parse_element(ptr, end - ptr, &tmp);
+			if ( NULL == elem ) {
+				amf_free(ret);
+				return NULL;
+			}
+
+			if ( !amf_array_set(ret, i, elem) ) {
+				amf_free(elem);
+				amf_free(ret);
+				return NULL;
+			}
+		}
 		break;
 	case AMF_NULL:
 		ret = amf_null();
@@ -559,7 +621,8 @@ static struct _amf *parse_element(const uint8_t *buf, size_t sz, size_t *taken)
 
 static void do_pretty_print(amf_t a, unsigned int depth)
 {
-	unsigned int i;
+	unsigned int i, sz;
+
 	if ( NULL == a ) {
 		printf("null\n"); 
 		return;
@@ -590,7 +653,17 @@ static void do_pretty_print(amf_t a, unsigned int depth)
 	case AMF_UNDEFINED:
 		printf("*undefined*\n");
 		break;
+	case AMF_STRICT_ARRAY:
+		sz = amf_array_size(a);
+		printf("[\n");
+		for(i = 0; i < sz; i++) {
+			printf("%*c.[%d] = ", depth, ' ', i);
+			do_pretty_print(a->u.obj.elem[i].val, depth + 4);
+		}
+		printf("%*c]\n", depth - 4, ' ');
+		break;
 	default:
+		abort();
 		break;
 	}
 }
