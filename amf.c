@@ -689,8 +689,6 @@ invoke_t amf_invoke_from_buf(const uint8_t *buf, size_t sz)
 	const uint8_t *end;
 	size_t taken;
 
-//	printf("==== AMF INVOKE ===\n");
-//	hex_dump(buf, sz, 16);
 	inv = amf_invoke_new(0);
 	if ( NULL == inv )
 		goto out;
@@ -699,8 +697,11 @@ invoke_t amf_invoke_from_buf(const uint8_t *buf, size_t sz)
 		struct _amf *a;
 
 		a = parse_element(buf, end - buf, &taken);
-		if ( NULL == a )
+		if ( NULL == a ) {
+			printf("==== FAILED TO PARSE AMF INVOKE ===\n");
+			hex_dump(buf, sz, 16);
 			goto out_free;
+		}
 
 		if ( !amf_invoke_append(inv, a) )
 			goto out_free;
