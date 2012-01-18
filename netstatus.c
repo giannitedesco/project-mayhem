@@ -282,7 +282,7 @@ static int dispatch(netstatus_t ns, invoke_t inv, const char *method)
 		int (*call)(netstatus_t ns, invoke_t inv);
 	}tbl[] = {
 		{.method = "_result", .call = n_result},
-		{.method = "_error", .call = n_error},
+		{.method = "_error", .call = std_result},
 		{.method = "onStatus", .call = std_result},
 	};
 	unsigned int i;
