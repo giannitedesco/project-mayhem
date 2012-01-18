@@ -229,7 +229,7 @@ static int std_result(netstatus_t ns, invoke_t inv)
 	}
 
 	printf(" UNHANDLED CODE\n");
-	return 1;
+	return 0;
 }
 
 static int create_result(netstatus_t ns, invoke_t inv)
