@@ -1,6 +1,10 @@
 #!/usr/bin/python
 
-import gobject, gtk, cairo
+import pymayhem as mayhem
+from urlparse import urlparse
+import httplib
+import threading
+import gobject, gtk, pango
 import pygst
 #pygst.require('0.10')
 import gst
@@ -19,25 +23,34 @@ class VidFile(VidSource):
 		self.f = open(fn)
 
 class VidPipeline(gst.Pipeline):
+	def codec_by_name(self, codec):
+		if codec == 'video/x-vp6-flash':
+			self.vdec = gst.element_factory_make('ffdec_vp6f',
+								'vdec')
+		else:
+			self.vdec = gst.element_factory_make('ffdec_h264',
+								'vdec')
+		self.add(self.vdec)
+		self.vdec.sync_state_with_parent()
+
 	def demux_pad(self, demux, pad):
 		n = pad.get_property('template').name_template
 		if n == 'video':
-			codec = pad.get_caps().to_string().split(',', 1)[0]
+			codec = pad.get_caps().get_structure(0).get_name()
+			self.codec_by_name(codec)
 			qv_pad = self.qv.get_pad('sink')
 			pad.link(qv_pad)
-			if codec == 'video/x-vp6-flash':
-				gst.element_link_many(self.qv, self.vdec2,
-							self.cspace)
-			else:
-				gst.element_link_many(self.qv, self.vdec1,
-							self.cspace)
+			gst.element_link_many(self.qv, self.vdec, self.cspace)
 		elif n == 'audio':
 			qa_pad = self.qa.get_pad('sink')
 			pad.link(qa_pad)
 
 	def need_data(self, src, size):
-		self.appsrc.emit('push-buffer', gst.Buffer(self.vid.read(size)))
-		return
+		buf = self.vid.read(size)
+		if len(buf) == 0:
+			self.set_state(gst.STATE_NULL)
+			return
+		self.appsrc.emit('push-buffer', gst.Buffer(buf))
 
 	def set_xwindow_id(self, xid):
 		self.vsink.set_xwindow_id(xid)
@@ -51,8 +64,6 @@ class VidPipeline(gst.Pipeline):
 
 		self.flvdemux = gst.element_factory_make('flvdemux', 'demux')
 
-		self.vdec1 = gst.element_factory_make('ffdec_h264', 'vdec1')
-		self.vdec2 = gst.element_factory_make('ffdec_vp6f', 'vdec2')
 		self.adec = gst.element_factory_make('flump3dec', 'adec')
 
 		self.vsink = gst.element_factory_make('xvimagesink', 'vsink')
@@ -67,33 +78,176 @@ class VidPipeline(gst.Pipeline):
 		self.flvdemux.connect('pad-added', self.demux_pad)
 
 		self.add(self.appsrc,
-					self.flvdemux,
-					self.adec,
-					self.vdec1,
-					self.vdec2,
-					self.aconv,
-					self.cspace,
-					self.qv,
-					self.qa,
-					self.vsink,
-					self.asink)
+				self.flvdemux,
+				self.adec,
+				self.aconv,
+				self.cspace,
+				self.qv,
+				self.qa,
+				self.vsink,
+				self.asink)
 
 		gst.element_link_many(self.appsrc, self.flvdemux)
 		gst.element_link_many(self.cspace, self.vsink)
-		gst.element_link_many(self.qa, self.adec, self.aconv, self.asink)
+		gst.element_link_many(self.qa, self.adec,
+					self.aconv, self.asink)
 
 		self.appsrc.connect('need-data', self.need_data)
 
 class VideoArea(gtk.DrawingArea):
-	def __init__(self, vid):
+	def __init__(self):
 		gtk.DrawingArea.__init__(self)
+
+	def setup(self, vid):
 		self.pipeline = VidPipeline(vid)
+		bus = self.pipeline.get_bus()
+		bus.add_signal_watch()
+		bus.enable_sync_message_emission()
+		bus.connect('message', self.on_message)
+		bus.connect('sync-message::element', self.on_sync_message)
+
+	def on_sync_message(self, bus, msg):
+		if msg.structure is None:
+			return
+		n = msg.structure.get_name()
+		if n == 'prepare-xwindow-id':
+			vsink = msg.src
+			vsink.set_property('force-aspect-ratio', True)
+			gtk.gdk.threads_enter()
+			vsink.set_xwindow_id(self.window.xid)
+			gtk.gdk.threads_leave()
+
+	def on_message(self, bus, msg):
+		t = msg.type
+		if t == gst.MESSAGE_EOS:
+			self.pipeline.set_state(gst.STATE_NULL)
+		elif t == gst.MESSAGE_ERROR:
+			(err, debug) = msg.parse_error()
+			self.pipeline.set_state(gst.STATE_NULL)
+			print err, debug
+		elif t == gst.MESSAGE_STATE_CHANGED:
+			(_,old,new) = msg.parse_state_changed()
+			if old == new:
+				return
+			if new != gst.STATE_PLAYING:
+				return
+			vpad = self.pipeline.vsink.get_pad('sink')
+			caps = vpad.get_negotiated_caps()
+			if caps is None:
+				return
+			s = caps.get_structure(0)
+			x = y = -1
+			if s.has_key('width'):
+				x = int(s['width'])
+			if s.has_key('height'):
+				y = int(s['height'])
+			self.set_size_request(x, y)
 
 	def play(self):
-		if self.window is None:
-			raise Exception, 'Can\'t show video yet'
-		self.pipeline.set_xwindow_id(self.window.xid)
 		self.pipeline.set_state(gst.STATE_PLAYING)
+
+class WebThread(threading.Thread):
+	def __init__(self, url, vcb):
+		threading.Thread.__init__(self)
+		self.url = url
+		self.vcb = vcb
+	def run(self):
+		u = urlparse(self.url)
+		if u.scheme != 'http':
+			raise Exception, 'HTTP URLs only'
+		conn = httplib.HTTPConnection(u.hostname, u.port)
+		conn.request('GET', u.path)
+		r = conn.getresponse()
+		if r.status != 200:
+			raise Exception, r.status, r.reason
+		html = r.read()
+
+		h = mayhem.WebParser()
+		h.feed(html)
+		gtk.gdk.threads_enter()
+		self.vcb(self.url, h.result)
+		gtk.gdk.threads_leave()
+
+class ChatBar(gtk.HBox):
+	def __init__(self):
+		gtk.HBox.__init__(self)
+		self.nick = gtk.Label('guest')
+		self.entry = gtk.Entry()
+		self.pack_start(self.nick, False, False, 8)
+		self.pack_start(self.entry, True, True, 0)
+
+class UserList(gtk.TreeView):
+	def __init__(self):
+		self.store = gtk.ListStore(gobject.TYPE_STRING)
+		gtk.TreeView.__init__(self, self.store)
+
+		self.set_headers_visible(True)
+		self.set_headers_clickable(False)
+		self.set_enable_search(False)
+		self.set_search_column(0)
+
+		r = gtk.CellRendererText()
+		col = gtk.TreeViewColumn('Users', None)
+		col.pack_start(r, True)
+		col.add_attribute(r, 'text', 0)
+		col.set_resizable(True)
+		self.append_column(col)
+		self.set_size_request(120, -1)
+
+	def extend(self, arr):
+		self.store.clear()
+		for usr in arr:
+			itr = self.store.append((usr,))
+		self.expand_all()
+
+class Header(gtk.VBox):
+	def __init__(self):
+		gtk.VBox.__init__(self)
+
+		self.performer = gtk.Label()
+		attr = pango.AttrList()
+		attr.insert(pango.AttrWeight(pango.WEIGHT_BOLD, 0, -1))
+		attr.insert(pango.AttrScale(pango.SCALE_XX_LARGE, 0, -1))
+
+		self.performer.set_property('attributes', attr)
+		self.performer.set_text('Loading...')
+
+		self.topic = gtk.Label()
+
+		self.pack_start(self.performer, True, True, 0)
+		self.pack_start(self.topic, False, True, 0)
+
+class Bitch(gtk.VBox):
+	def got_vars(self, url, v):
+		from sys import argv
+		self.hdr.performer.set_text('JanuaryJones')
+		self.hdr.topic.set_text('Sucking, fucking, toys, anal, squirting...')
+		self.userlist.extend(['bob', 'fred', 'jimbosucksdicks'])
+		self.vid.setup(VidFile(argv[1]))
+		self.vid.play()
+		#del self.wt
+
+	def __init__(self, url):
+		gtk.VBox.__init__(self)
+
+		self.vid = VideoArea()
+		self.hdr = Header()
+		self.chatbar = ChatBar()
+		self.userlist = UserList()
+
+		hb = gtk.HBox()
+		hb.pack_start(self.userlist, False, True, 0)
+		hb.pack_start(self.vid, True, True, 0)
+
+		self.pack_start(self.hdr, False, False, 0)
+		self.pack_start(hb, True, True, 0)
+		self.pack_start(self.chatbar, False, False, 0)
+
+	def start(self):
+#		self.wt = WebThread('http://www.webcammayhem.com/cam/DinaSky/',
+#					self.got_vars)
+#		self.wt.start()
+		self.got_vars('hai', {})
 
 class MainWin(gtk.Window):
 	def destroy(self, *_):
@@ -113,8 +267,6 @@ class MainWin(gtk.Window):
 		self.add_accel_group(agr)
 
 	def __init__(self):
-		from sys import argv
-
 		gtk.Window.__init__(self, gtk.WINDOW_TOPLEVEL)
 		self.in_main = False
 		self.connect('destroy', self.destroy)
@@ -124,12 +276,14 @@ class MainWin(gtk.Window):
 		self.__accel('<Control>Q', self.destroy)
 		self.__accel('<Control>W', self.destroy)
 
-		self.vid = VideoArea(VidFile(argv[1]))
-		self.add(self.vid)
+		self.bitch = Bitch('http://...')
+		self.add(self.bitch)
 
 		self.show_all()
-		self.vid.play()
+		self.bitch.start()
 
 if __name__ == '__main__':
+	gobject.threads_init()
+	gtk.gdk.threads_init()
 	x = MainWin()
 	x.main()
