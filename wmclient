@@ -168,13 +168,28 @@ class WebThread(threading.Thread):
 		self.vcb(self.url, h.result)
 		gtk.gdk.threads_leave()
 
-class ChatBar(gtk.HBox):
+class ChatBar(gtk.VBox):
 	def __init__(self):
-		gtk.HBox.__init__(self)
+		gtk.VBox.__init__(self)
 		self.nick = gtk.Label('guest')
 		self.entry = gtk.Entry()
-		self.pack_start(self.nick, False, False, 8)
-		self.pack_start(self.entry, True, True, 0)
+
+		hb = gtk.HBox()
+		hb.pack_start(self.nick, False, False, 8)
+		hb.pack_start(self.entry, True, True, 0)
+
+		self.chat = gtk.TextView()
+		self.chat.set_border_window_size(gtk.TEXT_WINDOW_LEFT, 8)
+
+		scr = gtk.ScrolledWindow()
+		scr.set_policy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
+		scr.add(self.chat)
+
+		exp = gtk.Expander('Chat Messages')
+		exp.add(scr)
+
+		self.pack_start(exp, True, False, 0)
+		self.pack_start(hb, True, False, 0)
 
 class UserList(gtk.TreeView):
 	def __init__(self):
