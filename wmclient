@@ -1,0 +1,135 @@
+#!/usr/bin/python
+
+import gobject, gtk, cairo
+import pygst
+#pygst.require('0.10')
+import gst
+
+class VidSource:
+	def read(self, sz):
+		raise Exception
+	def __init__(self):
+		pass
+
+class VidFile(VidSource):
+	def read(self, sz):
+		return self.f.read(sz)
+			
+	def __init__(self, fn):
+		self.f = open(fn)
+
+class VidPipeline(gst.Pipeline):
+	def demux_pad(self, demux, pad):
+		n = pad.get_property('template').name_template
+		if n == 'video':
+			codec = pad.get_caps().to_string().split(',', 1)[0]
+			qv_pad = self.qv.get_pad('sink')
+			pad.link(qv_pad)
+			if codec == 'video/x-vp6-flash':
+				gst.element_link_many(self.qv, self.vdec2,
+							self.cspace)
+			else:
+				gst.element_link_many(self.qv, self.vdec1,
+							self.cspace)
+		elif n == 'audio':
+			qa_pad = self.qa.get_pad('sink')
+			pad.link(qa_pad)
+
+	def need_data(self, src, size):
+		self.appsrc.emit('push-buffer', gst.Buffer(self.vid.read(size)))
+		return
+
+	def set_xwindow_id(self, xid):
+		self.vsink.set_xwindow_id(xid)
+
+	def __init__(self, vid, name = 'VidPipeline'):
+		gst.Pipeline.__init__(self, name)
+
+		self.vid = vid
+
+		self.appsrc = gst.element_factory_make('appsrc', 'file')
+
+		self.flvdemux = gst.element_factory_make('flvdemux', 'demux')
+
+		self.vdec1 = gst.element_factory_make('ffdec_h264', 'vdec1')
+		self.vdec2 = gst.element_factory_make('ffdec_vp6f', 'vdec2')
+		self.adec = gst.element_factory_make('flump3dec', 'adec')
+
+		self.vsink = gst.element_factory_make('xvimagesink', 'vsink')
+		self.asink = gst.element_factory_make('autoaudiosink', 'asink')
+
+		self.aconv = gst.element_factory_make('audioconvert', 'aconv')
+		self.cspace = gst.element_factory_make('autoconvert', 'vconv')
+
+		self.qv = gst.element_factory_make('queue', 'qv')
+		self.qa = gst.element_factory_make('queue', 'qa')
+
+		self.flvdemux.connect('pad-added', self.demux_pad)
+
+		self.add(self.appsrc,
+					self.flvdemux,
+					self.adec,
+					self.vdec1,
+					self.vdec2,
+					self.aconv,
+					self.cspace,
+					self.qv,
+					self.qa,
+					self.vsink,
+					self.asink)
+
+		gst.element_link_many(self.appsrc, self.flvdemux)
+		gst.element_link_many(self.cspace, self.vsink)
+		gst.element_link_many(self.qa, self.adec, self.aconv, self.asink)
+
+		self.appsrc.connect('need-data', self.need_data)
+
+class VideoArea(gtk.DrawingArea):
+	def __init__(self, vid):
+		gtk.DrawingArea.__init__(self)
+		self.pipeline = VidPipeline(vid)
+
+	def play(self):
+		if self.window is None:
+			raise Exception, 'Can\'t show video yet'
+		self.pipeline.set_xwindow_id(self.window.xid)
+		self.pipeline.set_state(gst.STATE_PLAYING)
+
+class MainWin(gtk.Window):
+	def destroy(self, *_):
+		gtk.Window.destroy(self)
+		if self.in_main:
+			gtk.mainquit()
+			self.in_main = False
+
+	def main(self):
+		self.in_main = True
+		gtk.main()
+
+	def __accel(self, a, cb):
+		agr = gtk.AccelGroup()
+		(k, m) = gtk.accelerator_parse(a)
+		agr.connect_group(k, m, gtk.ACCEL_VISIBLE, cb)
+		self.add_accel_group(agr)
+
+	def __init__(self):
+		from sys import argv
+
+		gtk.Window.__init__(self, gtk.WINDOW_TOPLEVEL)
+		self.in_main = False
+		self.connect('destroy', self.destroy)
+		self.set_default_size(640, 480)
+		self.set_title('Webcam Mayhem')
+
+		self.__accel('<Control>Q', self.destroy)
+		self.__accel('<Control>W', self.destroy)
+
+		self.vid = VideoArea(VidFile(argv[1]))
+		self.add(self.vid)
+
+		self.show_all()
+		self.vid.play()
+
+if __name__ == '__main__':
+	x = MainWin()
+	x.main()
