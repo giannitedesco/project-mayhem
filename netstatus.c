@@ -259,12 +259,10 @@ static int create_result(netstatus_t ns, invoke_t inv)
 static int n_result(netstatus_t ns, invoke_t inv)
 {
 	switch(ns->state) {
-	case NETSTATUS_STATE_CONNECT_SENT:
-		return std_result(ns, inv);
 	case NETSTATUS_STATE_CREATE_SENT:
 		return create_result(ns, inv);
 	default:
-		return 0;
+		return std_result(ns, inv);
 	}
 }
 
