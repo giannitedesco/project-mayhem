@@ -19,11 +19,12 @@
 
 #define MAYHEM_STATE_ABORT		0
 #define MAYHEM_STATE_CONNECTING		1
-#define MAYHEM_STATE_FROZEN		2
-#define MAYHEM_STATE_AUTHORIZED		3
-#define MAYHEM_STATE_GOT_STREAM		4
-#define MAYHEM_STATE_PLAYING		5
-#define MAYHEM_STATE_PAUSED		6
+#define MAYHEM_STATE_CONNECTED		2
+#define MAYHEM_STATE_FROZEN		3
+#define MAYHEM_STATE_AUTHORIZED		4
+#define MAYHEM_STATE_GOT_STREAM		5
+#define MAYHEM_STATE_PLAYING		6
+#define MAYHEM_STATE_PAUSED		7
 
 struct _mayhem {
 	char *bitch;
@@ -320,7 +321,8 @@ static int naiad_dispatch(mayhem_t m, invoke_t inv, const char *method)
 	return 0;
 }
 
-static int dispatch(void *priv, invoke_t inv)
+/* RTMP Stream event callbacks */
+static int invoke(void *priv, invoke_t inv)
 {
 	struct _mayhem *m = priv;
 	amf_t method;
@@ -350,22 +352,6 @@ static int dispatch(void *priv, invoke_t inv)
 		return 0;
 	if ( !ret )
 		return 0; /* unhandled */
-
-	/* TODO: We may need to handle netstatus status and reflect it
-	 * in overall application state
-	*/
-	switch(netstatus_state(m->ns)) {
-	case NETSTATUS_STATE_CREATED:
-		m->state = MAYHEM_STATE_GOT_STREAM;
-		break;
-	case NETSTATUS_STATE_PLAYING:
-		printf("mayhem: playing...\n");
-		m->state = MAYHEM_STATE_PLAYING;
-		break;
-	default:
-		break;
-	}
-
 	return 1;
 }
 
@@ -376,10 +362,9 @@ static int invoke_connect(struct _mayhem *m, struct _wmvars *v)
 	inv = mayhem_amf_connect(v);
 	if ( NULL == inv )
 		goto out;
-	ret = rtmp_invoke(m->rtmp, 3, 0, inv);
+	ret = netstatus_connect_custom(m->ns, inv);
 	if ( ret ) {
 		m->state = MAYHEM_STATE_CONNECTING;
-		netstatus_set_state(m->ns, NETSTATUS_STATE_CONNECT_SENT);
 	}
 	amf_invoke_free(inv);
 out:
@@ -395,39 +380,11 @@ static int invoke_start(struct _mayhem *m)
 		goto out;
 	ret = rtmp_flex_invoke(m->rtmp, 3, 0, inv);
 	if ( ret ) {
-		m->state = MAYHEM_STATE_CONNECTING;
-		netstatus_set_state(m->ns, NETSTATUS_STATE_CONNECT_SENT);
+		/* ?? */
 	}
 	amf_invoke_free(inv);
 out:
 	return ret;
-}
-
-static int create_stream(struct _mayhem *m, double num)
-{
-	if (netstatus_state(m->ns) == NETSTATUS_STATE_CONNECTED) {
-		return netstatus_createstream(m->ns, 2.0);
-	}
-	return 1;
-}
-
-static int play(struct _mayhem *m)
-{
-	if (netstatus_state(m->ns) == NETSTATUS_STATE_CREATED ) {
-		return netstatus_play(m->ns, amf_stringf("%d", m->sid));
-	}
-	return 1;
-}
-
-void mayhem_close(mayhem_t m)
-{
-	if ( m ) {
-		flv_close(m->flv);
-		free(m->bitch);
-		netstatus_free(m->ns);
-		rtmp_close(m->rtmp);
-		free(m);
-	}
 }
 
 static int notify(void *priv, struct rtmp_pkt *pkt,
@@ -472,24 +429,6 @@ static int rip(void *priv, struct rtmp_pkt *pkt,
 
 static int stream_start(void *priv)
 {
-	struct _mayhem *m = priv;
-	char buf[((m->bitch) ? strlen(m->bitch) : 64) + 128];
-	char tmbuf[128];
-	struct tm *tm;
-	time_t t;
-
-	t = time(NULL);
-
-	tm = localtime(&t);
-	strftime(tmbuf, sizeof(tmbuf), "%F-%H-%M-%S", tm);
-	snprintf(buf, sizeof(buf), "%s-%s.flv",
-		(m->bitch) ? m->bitch : "UNKNOWN", tmbuf);
-
-	if ( m->flv )
-		flv_close(m->flv);
-	m->flv = flv_creat(buf);
-
-	printf("mayhem: create FLV: %s\n", buf);
 	return 1;
 }
 
@@ -509,16 +448,114 @@ static void checkup(void *priv, uint32_t ts)
 			RTMP_MSG_FLEX_MESSAGE, buf, sizeof(buf));
 }
 
+/* NetConnection callbacks */
+static void connected(netstatus_t ns, void *priv)
+{
+	struct _mayhem *m = priv;
+
+	m->state = MAYHEM_STATE_CONNECTED;
+	if ( !netstatus_createstream(m->ns, 2.0) ) {
+		mayhem_abort(m);
+		return;
+	}
+}
+
+static void stream_created(netstatus_t ns, void *priv, unsigned int stream_id)
+{
+	struct _mayhem *m = priv;
+
+	m->state = MAYHEM_STATE_GOT_STREAM;
+	if ( !netstatus_play(m->ns, amf_stringf("%d", m->sid), stream_id) ) {
+		mayhem_abort(m);
+		return;
+	}
+}
+
+static void connect_error(netstatus_t ns, void *priv,
+			const char *code, const char *desc)
+{
+	struct _mayhem *m = priv;
+	printf("mayhem: %s: %s\n", code, desc);
+	mayhem_abort(m);
+}
+
+/* Nettream callbacks */
+
+static void start(netstatus_t ns, void *priv)
+{
+	struct _mayhem *m = priv;
+	char buf[((m->bitch) ? strlen(m->bitch) : 64) + 128];
+	char tmbuf[128];
+	struct tm *tm;
+	time_t t;
+
+	t = time(NULL);
+
+	tm = localtime(&t);
+	strftime(tmbuf, sizeof(tmbuf), "%F-%H-%M-%S", tm);
+	snprintf(buf, sizeof(buf), "%s-%s.flv",
+		(m->bitch) ? m->bitch : "UNKNOWN", tmbuf);
+
+	if ( m->flv )
+		flv_close(m->flv);
+	m->flv = flv_creat(buf);
+
+	printf("mayhem: create FLV: %s\n", buf);
+}
+
+static void stop(netstatus_t ns, void *priv)
+{
+	//struct _mayhem *m = priv;
+	printf("mayhem: stop\n");
+}
+
+static void reset(netstatus_t ns, void *priv)
+{
+	//struct _mayhem *m = priv;
+	printf("mayhem: reset\n");
+}
+
+static void play_error(netstatus_t ns, void *priv,
+			const char *code, const char *desc)
+{
+	struct _mayhem *m = priv;
+	printf("mayhem: %s: %s\n", code, desc);
+	mayhem_abort(m);
+}
+
+/* Constructor/destructor */
+void mayhem_close(mayhem_t m)
+{
+	if ( m ) {
+		flv_close(m->flv);
+		free(m->bitch);
+		netstatus_free(m->ns);
+		rtmp_close(m->rtmp);
+		free(m);
+	}
+}
+
 mayhem_t mayhem_connect(wmvars_t vars)
 {
 	struct _mayhem *m;
 	static const struct rtmp_ops ops = {
-		.invoke = dispatch,
+		.invoke = invoke,
 		.notify = notify,
 		.audio = rip,
 		.video = rip,
 		.stream_start = stream_start,
 		.read_report_sent = checkup,
+	};
+	static const struct netstream_ops ns_ops = {
+		.start = start,
+		.stop = stop,
+		.reset = reset,
+		.error = play_error,
+	};
+	static const struct netconn_ops nc_ops = {
+		.connected = connected,
+		.stream_created = stream_created,
+		.error = connect_error,
 	};
 
 	m = calloc(1, sizeof(*m));
@@ -536,6 +573,8 @@ mayhem_t mayhem_connect(wmvars_t vars)
 		goto out_free;
 
 	rtmp_set_handlers(m->rtmp, &ops, m);
+	netstatus_stream_ops(m->ns, &ns_ops, m);
+	netstatus_connect_ops(m->ns, &nc_ops, m);
 
 	if ( !invoke_connect(m, vars) )
 		goto out_free_netstatus;
@@ -543,20 +582,18 @@ mayhem_t mayhem_connect(wmvars_t vars)
 	while ( m->state != MAYHEM_STATE_ABORT && rtmp_pump(m->rtmp) ) {
 		switch(m->state) {
 		case MAYHEM_STATE_CONNECTING:
-			/* I don't sleep, I wait */
-			break;
-		case MAYHEM_STATE_FROZEN:
-			printf("mayhem: fuck this shit!\n");
-			mayhem_abort(m);
-			break;
+		case MAYHEM_STATE_CONNECTED:
 		case MAYHEM_STATE_AUTHORIZED:
-			create_stream(m, 2.0);
-			break;
 		case MAYHEM_STATE_GOT_STREAM:
-			play(m);
+			/* I don't sleep, I wait */
 			break;
 		case MAYHEM_STATE_PLAYING:
 			/* let the good times roll */
+			break;
+		case MAYHEM_STATE_FROZEN:
+		case MAYHEM_STATE_ABORT:
+			printf("mayhem: fuck this shit!\n");
+			mayhem_abort(m);
 			break;
 		default:
 			printf("ugh? %d\n", m->state);

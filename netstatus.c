@@ -15,10 +15,23 @@
 #include <rtmp/rtmp.h>
 #include <rtmp/netstatus.h>
 
+#define NETSTATUS_STATE_INITIAL			0
+#define NETSTATUS_STATE_CONNECT_SENT		1
+#define NETSTATUS_STATE_CONNECTED		2
+#define NETSTATUS_STATE_CREATE_SENT		3
+#define NETSTATUS_STATE_CREATED			4
+#define NETSTATUS_STATE_PLAY_SENT		5
+#define NETSTATUS_STATE_PLAYING			6
+#define NETSTATUS_STATE_STOPPED			7
+#define NETSTATUS_STATE_RESET			8
+
 struct _netstatus {
 	rtmp_t rtmp;
+	void *ns_priv;
+	void *nc_priv;
+	const struct netstream_ops *ns_ops;
+	const struct netconn_ops *nc_ops;
 	unsigned int state;
-	unsigned int stream_id;
 	int chan;
 	uint32_t dest;
 };
@@ -58,6 +71,20 @@ static int rip_status(amf_t o_stat, struct netstatus_event *st)
 	return 1;
 }
 
+void netstatus_stream_ops(netstatus_t ns,
+				const struct netstream_ops *ops, void *priv)
+{
+	ns->ns_ops = ops;
+	ns->ns_priv = priv;
+}
+
+void netstatus_connect_ops(netstatus_t ns,
+				const struct netconn_ops *ops, void *priv)
+{
+	ns->nc_ops = ops;
+	ns->nc_priv = priv;
+}
+
 static invoke_t createstream(double num)
 {
 	invoke_t inv;
@@ -95,7 +122,7 @@ int netstatus_createstream(netstatus_t ns, double num)
 	return ret;
 }
 
-int netstatus_play(netstatus_t ns, amf_t obj)
+int netstatus_play(netstatus_t ns, amf_t obj, unsigned int stream_id)
 {
 	invoke_t inv;
 	int ret = 0;
@@ -115,23 +142,13 @@ int netstatus_play(netstatus_t ns, amf_t obj)
 	if ( !amf_invoke_set(inv, 3, obj) )
 		goto out;
 
-	ret = rtmp_flex_invoke(ns->rtmp, 8, ns->stream_id, inv);
+	ret = rtmp_flex_invoke(ns->rtmp, 8, stream_id, inv);
 	if ( ret ) {
 		ns->state = NETSTATUS_STATE_PLAY_SENT;
 	}
 out:
 	amf_invoke_free(inv);
 	return ret;
-}
-
-void netstatus_set_state(netstatus_t ns, unsigned int state)
-{
-	ns->state = state;
-}
-
-unsigned int netstatus_state(netstatus_t ns)
-{
-	return ns->state;
 }
 
 netstatus_t netstatus_new(rtmp_t rtmp, int chan, uint32_t dest)
@@ -153,12 +170,32 @@ out:
 static int conn_success(struct _netstatus *ns, struct netstatus_event *ev)
 {
 	ns->state = NETSTATUS_STATE_CONNECTED;
+	if ( ns->nc_ops && ns->nc_ops->connected )
+		(*ns->nc_ops->connected)(ns, ns->nc_priv);
 	return 1;
 }
 
 static int play_start(struct _netstatus *ns, struct netstatus_event *ev)
 {
 	ns->state = NETSTATUS_STATE_PLAYING;
+	if ( ns->ns_ops && ns->ns_ops->start )
+		(*ns->ns_ops->start)(ns, ns->ns_priv);
+	return 1;
+}
+
+static int play_stop(struct _netstatus *ns, struct netstatus_event *ev)
+{
+	ns->state = NETSTATUS_STATE_STOPPED;
+	if ( ns->ns_ops && ns->ns_ops->stop )
+		(*ns->ns_ops->stop)(ns, ns->ns_priv);
+	return 1;
+}
+
+static int play_reset(struct _netstatus *ns, struct netstatus_event *ev)
+{
+	ns->state = NETSTATUS_STATE_RESET;
+	if ( ns->ns_ops && ns->ns_ops->reset )
+		(*ns->ns_ops->reset)(ns, ns->ns_priv);
 	return 1;
 }
 
@@ -177,8 +214,8 @@ static int std_result(netstatus_t ns, invoke_t inv)
 		{.code = "NetConnection.Connect.NetworkChange",},
 		{.code = "NetConnection.Connect.Rejected",},
 		{.code = "NetStream.Play.Start", .fn = play_start },
-		{.code = "NetStream.Play.Reset",},
-		{.code = "NetStream.Play.Stop",},
+		{.code = "NetStream.Play.Reset", .fn = play_reset},
+		{.code = "NetStream.Play.Stop", .fn = play_stop },
 		{.code = "NetStream.Play.UnpublishNotify",},
 		{.code = "NetStream.Play.PublishNotify",},
 		{.code = "NetStream.Play.StreamNotFound",},
@@ -234,6 +271,7 @@ static int std_result(netstatus_t ns, invoke_t inv)
 
 static int create_result(netstatus_t ns, invoke_t inv)
 {
+	unsigned int stream_id;
 	amf_t o_rc, o_id;
 
 	if ( amf_invoke_nargs(inv) < 4 ) {
@@ -249,10 +287,12 @@ static int create_result(netstatus_t ns, invoke_t inv)
 		return 0;
 	}
 
-	ns->stream_id = amf_get_number(o_id);
+	stream_id = amf_get_number(o_id);
 	printf("netstatus: Stream created (%f) with id: %d\n",
-		amf_get_number(o_rc), ns->stream_id);
+		amf_get_number(o_rc), stream_id);
 	ns->state = NETSTATUS_STATE_CREATED;
+	if ( ns->nc_ops && ns->nc_ops->stream_created)
+		(*ns->nc_ops->stream_created)(ns, ns->nc_priv, stream_id);
 	return 1;
 }
 
@@ -293,6 +333,16 @@ static int dispatch(netstatus_t ns, invoke_t inv, const char *method)
 		return 1;
 	}
 	return 0;
+}
+
+int netstatus_connect_custom(netstatus_t ns, invoke_t inv)
+{
+	int ret;
+	ret = rtmp_invoke(ns->rtmp, ns->chan, ns->dest, inv);
+	if ( ret ) {
+		ns->state = NETSTATUS_STATE_CONNECT_SENT;
+	}
+	return ret;
 }
 
 int netstatus_invoke(netstatus_t ns, invoke_t inv)

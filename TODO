@@ -3,16 +3,6 @@ Windows port:
  - we'll need sock_init()/sock_fini() API with refcounts (and use them) for
    initialising/cleaning up winsock subsystem
 
-NetStatus cleanups:
- - this module should just handle netstatus object and do all the
-   marshalling/demarshalling between C/AMF messages related to that object
- - remove state field as part of the API
- - provide callback blocks for:
-   - object creation/destruction
-   - NetConnection.*
-   - NetStream.Play.*
- - should make mayhem.c a lot tider
-
 Timestamp generation and bandwidth management:
  - Use real timestamps in rtmp code, where necessary
 
