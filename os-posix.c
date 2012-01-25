@@ -11,6 +11,7 @@
 #include <netdb.h>
 #include <errno.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 const char *sock_err(void)
 {
@@ -65,4 +66,32 @@ out:
 void sock_close(os_sock_t s)
 {
 	close(s);
+}
+
+/** Configure blocking mode on a file descriptor.
+ * @param fd FD to set blocking mode on
+ * @param b Whether to enable or disable blocking mode
+ *
+ * Configures blocking mode on a file descriptor.
+ *
+ * @return 0 on error, 1 on success.
+ */
+int sock_blocking(os_sock_t s, int b)
+{
+	int fl;
+
+	fl = fcntl(s, F_GETFL);
+	if ( fl < 0 )
+		return 0;
+
+	if ( b )
+		fl &= ~O_NONBLOCK;
+	else
+		fl |= O_NONBLOCK;
+
+	fl = fcntl(s, F_SETFL, fl);
+	if ( fl < 0 )
+		return 0;
+
+	return 1;
 }

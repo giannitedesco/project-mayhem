@@ -17,6 +17,7 @@ os_sock_t sock_connect(const char *ip, uint16_t port);
 ssize_t sock_send(os_sock_t sock, const uint8_t *buf, size_t len);
 ssize_t sock_recv(os_sock_t sock, uint8_t *buf, size_t len);
 void sock_close(os_sock_t sock);
+int sock_blocking(os_sock_t s, int b);
 const char *sock_err(void);
 
 #endif /* _WMDUMP_OS_H */

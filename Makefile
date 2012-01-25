@@ -20,8 +20,21 @@ LD := $(CROSS_COMPILE)ld
 AR := $(CROSS_COMPILE)ar
 RM := rm
 
+ifeq ($(OS), win32)
+NBIO_MOD := nbio-iocp.o
+OS_DEFS := -DHAVE_IOCP
+else
+ifeq ($(OS), linux)
+NBIO_MOD := nbio-epoll.o nbio-poll.o
+OS_DEFS := -DHAVE_ACCEPT4 -DHAVE_EPOLL -DHAVE_POLL
+else
+NBIO_MOD := nbio-poll.o
+OS_DEFS := -DHAVE_POLL
+endif
+endif
+
 # the obvious
-EXTRA_DEFS := -D_FILE_OFFSET_BITS=64
+EXTRA_DEFS := -D_FILE_OFFSET_BITS=64 $(OS_DEFS)
 CFLAGS := -g -pipe -O2 -Wall \
 	-Wsign-compare -Wcast-align \
 	-Waggregate-return \
@@ -41,6 +54,8 @@ else
 OS_OBJ := blob.o os-posix.o
 endif
 
+NBIO_OBJ := nbio.o nbio-listener.o nbio-connecter.o $(NBIO_MOD)
+
 AMFPARSE_BIN := amfparse$(SUFFIX)
 AMFPARSE_LIBS :=
 AMFPARSE_OBJ := $(OS_OBJ) \
@@ -52,6 +67,7 @@ AMFPARSE_OBJ := $(OS_OBJ) \
 DUMP_BIN := wmdump$(SUFFIX)
 DUMP_LIBS := 
 DUMP_OBJ := $(OS_OBJ) \
+		$(NBIO_OBJ) \
 		cvars.o \
 		hexdump.o \
 		netstatus.o \

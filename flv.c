@@ -4,7 +4,6 @@
 */
 #include <wmdump.h>
 #include <wmvars.h>
-#include <mayhem.h>
 
 #include <rtmp/amf.h>
 #include <rtmp/rtmp.h>
