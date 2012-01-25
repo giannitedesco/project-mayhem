@@ -49,9 +49,9 @@ AMFPARSE_OBJ := $(OS_OBJ) \
 		hexdump.o \
 		amfparse.o
 
-MAYHEM_BIN := mayhem$(SUFFIX)
-MAYHEM_LIBS := 
-MAYHEM_OBJ := $(OS_OBJ) \
+DUMP_BIN := wmdump$(SUFFIX)
+DUMP_LIBS := 
+DUMP_OBJ := $(OS_OBJ) \
 		cvars.o \
 		hexdump.o \
 		netstatus.o \
@@ -61,10 +61,10 @@ MAYHEM_OBJ := $(OS_OBJ) \
 		flv.o \
 		mayhem.o \
 		mayhem-amf.o \
-		main.o
+		dump.o
 
-ALL_BIN := $(MAYHEM_BIN) $(AMFPARSE_BIN)
-ALL_OBJ := $(MAYHEM_OBJ) $(AMFPARSE_OBJ)
+ALL_BIN := $(DUMP_BIN) $(AMFPARSE_BIN)
+ALL_OBJ := $(DUMP_OBJ) $(AMFPARSE_OBJ)
 ALL_DEP := $(patsubst %.o, .%.d, $(ALL_OBJ))
 ALL_TARGETS := $(ALL_BIN)
 
@@ -88,9 +88,9 @@ endif
 		-MT $(patsubst .%.d, %.o, $@) \
 		-c -o $(patsubst .%.d, %.o, $@) $<
 
-$(MAYHEM_BIN): $(MAYHEM_OBJ)
+$(DUMP_BIN): $(DUMP_OBJ)
 	@echo " [LINK] $@"
-	@$(CC) $(CFLAGS) -o $@ $(MAYHEM_OBJ) $(MAYHEM_LIBS)
+	@$(CC) $(CFLAGS) -o $@ $(DUMP_OBJ) $(DUMP_LIBS)
 
 $(AMFPARSE_BIN): $(AMFPARSE_OBJ)
 	@echo " [LINK] $@"

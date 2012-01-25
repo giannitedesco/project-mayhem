@@ -9,6 +9,7 @@
 typedef struct _mayhem *mayhem_t;
 
 mayhem_t mayhem_connect(wmvars_t vars);
+int mayhem_pump(mayhem_t m);
 void mayhem_close(mayhem_t m);
 
 #endif /* _WMDUMP_MAYHEM_H */

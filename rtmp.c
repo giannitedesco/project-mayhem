@@ -358,13 +358,13 @@ static int r_ctl(struct _rtmp *r, struct rtmp_pkt *pkt,
 
 	switch(type) {
 	case RTMP_CTL_STREAM_BEGIN:
-		printf("rtmp: Stream begin\n");
+		dprintf("rtmp: Stream begin\n");
 		if ( r->ev_ops && r->ev_ops->stream_start ) {
 			return (*r->ev_ops->stream_start)(r->ev_priv);
 		}
 		break;
 	case RTMP_CTL_PING:
-		printf("rtmp: PING\n");
+		dprintf("rtmp: PING\n");
 		if ( sz < sizeof(echo) )
 			return 0;
 		echo = decode_int32(buf);

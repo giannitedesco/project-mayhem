@@ -479,8 +479,7 @@ static void connect_error(netstatus_t ns, void *priv,
 	mayhem_abort(m);
 }
 
-/* Nettream callbacks */
-
+/* Netsream callbacks */
 static void start(netstatus_t ns, void *priv)
 {
 	struct _mayhem *m = priv;
@@ -535,6 +534,37 @@ void mayhem_close(mayhem_t m)
 	}
 }
 
+int mayhem_pump(mayhem_t m)
+{
+	if ( m->state == MAYHEM_STATE_ABORT )
+		return 0;
+
+	if ( !rtmp_pump(m->rtmp) )
+		mayhem_abort(m);
+
+	switch(m->state) {
+	case MAYHEM_STATE_CONNECTING:
+	case MAYHEM_STATE_CONNECTED:
+	case MAYHEM_STATE_AUTHORIZED:
+	case MAYHEM_STATE_GOT_STREAM:
+		/* I don't sleep, I wait */
+		break;
+	case MAYHEM_STATE_PLAYING:
+		/* let the good times roll */
+		break;
+	case MAYHEM_STATE_FROZEN:
+	case MAYHEM_STATE_ABORT:
+		printf("mayhem: fuck this shit!\n");
+		mayhem_abort(m);
+		break;
+	default:
+		printf("ugh? %d\n", m->state);
+		abort();
+	}
+
+	return (m->state != MAYHEM_STATE_ABORT);
+}
+
 mayhem_t mayhem_connect(wmvars_t vars)
 {
 	struct _mayhem *m;
@@ -570,7 +600,7 @@ mayhem_t mayhem_connect(wmvars_t vars)
 
 	m->ns = netstatus_new(m->rtmp, 3, 0);
 	if ( NULL == m->ns )
-		goto out_free;
+		goto out_free_rtmp;
 
 	rtmp_set_handlers(m->rtmp, &ops, m);
 	netstatus_stream_ops(m->ns, &ns_ops, m);
@@ -579,32 +609,17 @@ mayhem_t mayhem_connect(wmvars_t vars)
 	if ( !invoke_connect(m, vars) )
 		goto out_free_netstatus;
 
-	while ( m->state != MAYHEM_STATE_ABORT && rtmp_pump(m->rtmp) ) {
-		switch(m->state) {
-		case MAYHEM_STATE_CONNECTING:
-		case MAYHEM_STATE_CONNECTED:
-		case MAYHEM_STATE_AUTHORIZED:
-		case MAYHEM_STATE_GOT_STREAM:
-			/* I don't sleep, I wait */
-			break;
-		case MAYHEM_STATE_PLAYING:
-			/* let the good times roll */
-			break;
-		case MAYHEM_STATE_FROZEN:
-		case MAYHEM_STATE_ABORT:
-			printf("mayhem: fuck this shit!\n");
-			mayhem_abort(m);
-			break;
-		default:
-			printf("ugh? %d\n", m->state);
-			abort();
-		}
+	while( m->state != MAYHEM_STATE_CONNECTED ) {
+		if ( !mayhem_pump(m) )
+			goto out_free_netstatus;
 	}
 
 	/* success */
 	goto out;
 out_free_netstatus:
 	netstatus_free(m->ns);
+out_free_rtmp:
+	rtmp_close(m->rtmp);
 out_free:
 	free(m);
 	m = NULL;

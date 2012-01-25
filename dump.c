@@ -18,6 +18,9 @@ static int wmdump(const char *varfile)
 	if ( NULL == m )
 		goto out_free_vars;
 
+	while( mayhem_pump(m) )
+		/* do nothing */;
+
 	printf("success\n");
 	ret = 1;
 
@@ -25,7 +28,7 @@ static int wmdump(const char *varfile)
 out_free_vars:
 	wmvars_free(v);
 out:
-	return 1;
+	return ret;
 }
 
 int main(int argc, char **argv)
