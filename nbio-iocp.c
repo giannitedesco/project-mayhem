@@ -1,9 +1,9 @@
 /*
- * This file is part of Firestorm NIDS
+ * This file is part of project-mayhem
  * Copyright (c) 2004 Gianni Tedesco
- * Released under the terms of the GNU GPL version 2
+ * Released under the terms of the GNU GPL version 3
  *
- * Linux iocp based eventloop
+ * Windows I/O completion port based eventloop
  */
 
 #include <nbio.h>
