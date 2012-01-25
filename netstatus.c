@@ -8,7 +8,6 @@
 */
 #include <wmdump.h>
 #include <wmvars.h>
-#include <mayhem.h>
 #include <os.h>
 
 #include <rtmp/amf.h>
@@ -251,12 +250,6 @@ static int std_result(netstatus_t ns, invoke_t inv)
 	if ( !rip_status(o_stat, &st) )
 		return 0;
 
-	printf("NetStatusEvent: result:\n");
-	printf(" rc = %d\n", rc);
-	printf(" level = %s\n", st.level);
-	printf(" code = %s\n", st.code);
-	printf(" desc = %s\n", st.desc);
-
 	for(i = 0; i < ARRAY_SIZE(disp); i++) {
 		if ( strcmp(disp[i].code, st.code) )
 			continue;
@@ -265,7 +258,12 @@ static int std_result(netstatus_t ns, invoke_t inv)
 		return 1;
 	}
 
-	printf(" UNHANDLED CODE\n");
+	printf("NetStatusEvent: result:\n");
+	printf(" rc = %d\n", rc);
+	printf(" level = %s\n", st.level);
+	printf(" code = %s\n", st.code);
+	printf(" desc = %s\n", st.desc);
+
 	return 0;
 }
 
