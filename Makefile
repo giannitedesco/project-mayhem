@@ -54,7 +54,7 @@ else
 OS_OBJ := blob.o os-posix.o
 endif
 
-NBIO_OBJ := nbio.o nbio-listener.o nbio-connecter.o $(NBIO_MOD)
+NBIO_OBJ := nbio.o nbio-connecter.o $(NBIO_MOD)
 
 AMFPARSE_BIN := amfparse$(SUFFIX)
 AMFPARSE_LIBS :=
