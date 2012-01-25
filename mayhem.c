@@ -4,18 +4,15 @@
 */
 #include <wmdump.h>
 #include <wmvars.h>
-#include <mayhem.h>
 
 #include <rtmp/amf.h>
 #include <rtmp/rtmp.h>
 #include <rtmp/proto.h>
 #include <rtmp/netstatus.h>
-#include <flv.h>
+#include <mayhem.h>
 
 #include "cvars.h"
 #include "mayhem-amf.h"
-
-#include <time.h>
 
 #define MAYHEM_STATE_ABORT		0
 #define MAYHEM_STATE_CONNECTING		1
@@ -27,57 +24,17 @@
 #define MAYHEM_STATE_PAUSED		7
 
 struct _mayhem {
-	char *bitch;
 	rtmp_t rtmp;
 	netstatus_t ns;
-	FILE *flv;
+	const struct mayhem_ops *ops;
+	void *priv;
 	unsigned int state;
 	unsigned int sid;
 };
 
-struct naiad_room {
-	unsigned int flags;
-	const char *topic;
-};
-
-static void mayhem_abort(struct _mayhem *m)
+void mayhem_abort(mayhem_t m)
 {
 	m->state = MAYHEM_STATE_ABORT;
-}
-
-static int update_bitch(struct _mayhem *m, const char *bitch)
-{
-	char *b = strdup(bitch);
-
-	if ( NULL == b )
-		return 0;
-
-	m->bitch = b;
-	return 1;
-}
-
-static int NaiadAuthorize(mayhem_t m, int code,
-				const char *nick,
-				const char *bitch,
-				unsigned int sid,
-				struct naiad_room *room)
-{
-	printf("NaiadAuthorize: code = %u\n", code);
-	printf(" your nickname: %s\n", nick);
-	printf(" performer: %s\n", bitch);
-	printf(" room flags: %d (0x%x)\n", room->flags, room->flags);
-	printf(" topic is: %s\n", (room->topic) ? room->topic : "");
-	update_bitch(m, bitch);
-	m->state = MAYHEM_STATE_AUTHORIZED;
-	return 1;
-}
-
-static int NaiadFreeze(mayhem_t m, int code, void *u1, int u2, const char *desc)
-{
-	printf("NaiadFreeze: %d: %s\n", code, desc);
-	m->state = MAYHEM_STATE_FROZEN;
-	//m->state = MAYHEM_STATE_AUTHORIZED;
-	return 1;
 }
 
 static int i_auth(mayhem_t m, invoke_t inv)
@@ -128,12 +85,15 @@ static int i_auth(mayhem_t m, invoke_t inv)
 		return 0;
 	}
 
-	return NaiadAuthorize(m,
+	m->state = MAYHEM_STATE_AUTHORIZED;
+	if ( m->ops && m->ops->NaiadAuthorize )
+		(m->ops->NaiadAuthorize)(m->priv,
 				amf_get_number(o_rc),
 				amf_get_string(o_nick),
 				amf_get_string(o_bitch),
 				atoi(amf_get_string(o_sid)),
 				&room);
+	return 1;
 }
 
 
@@ -153,8 +113,11 @@ static int i_freeze(mayhem_t m, invoke_t inv)
 		return 0;
 	}
 
-	return NaiadFreeze(m, amf_get_number(o_rc),
+	m->state = MAYHEM_STATE_FROZEN;
+	if ( m->ops && m->ops->NaiadFreeze )
+		(*m->ops->NaiadFreeze)(m->priv, amf_get_number(o_rc),
 				NULL, -1, amf_get_string(o_desc));
+	return 1;
 }
 
 struct user {
@@ -414,7 +377,8 @@ static int notify(void *priv, struct rtmp_pkt *pkt,
 
 	invoke_start(m);
 
-	flv_rip(m->flv, pkt, buf, sz);
+	if ( m->ops && m->ops->stream_packet )
+		(*m->ops->stream_packet)(m->priv, pkt, buf, sz);
 
 	return 1;
 }
@@ -423,12 +387,8 @@ static int rip(void *priv, struct rtmp_pkt *pkt,
 			const uint8_t *buf, size_t sz)
 {
 	struct _mayhem *m = priv;
-	flv_rip(m->flv, pkt, buf, sz);
-	return 1;
-}
-
-static int stream_start(void *priv)
-{
+	if ( m->ops && m->ops->stream_packet )
+		(*m->ops->stream_packet)(m->priv, pkt, buf, sz);
 	return 1;
 }
 
@@ -483,35 +443,22 @@ static void connect_error(netstatus_t ns, void *priv,
 static void start(netstatus_t ns, void *priv)
 {
 	struct _mayhem *m = priv;
-	char buf[((m->bitch) ? strlen(m->bitch) : 64) + 128];
-	char tmbuf[128];
-	struct tm *tm;
-	time_t t;
-
-	t = time(NULL);
-
-	tm = localtime(&t);
-	strftime(tmbuf, sizeof(tmbuf), "%F-%H-%M-%S", tm);
-	snprintf(buf, sizeof(buf), "%s-%s.flv",
-		(m->bitch) ? m->bitch : "UNKNOWN", tmbuf);
-
-	if ( m->flv )
-		flv_close(m->flv);
-	m->flv = flv_creat(buf);
-
-	printf("mayhem: create FLV: %s\n", buf);
+	if ( m->ops && m->ops->stream_play )
+		(*m->ops->stream_play)(m->priv);
 }
 
 static void stop(netstatus_t ns, void *priv)
 {
-	//struct _mayhem *m = priv;
-	printf("mayhem: stop\n");
+	struct _mayhem *m = priv;
+	if ( m->ops && m->ops->stream_stop )
+		(*m->ops->stream_stop)(m->priv);
 }
 
 static void reset(netstatus_t ns, void *priv)
 {
-	//struct _mayhem *m = priv;
-	printf("mayhem: reset\n");
+	struct _mayhem *m = priv;
+	if ( m->ops && m->ops->stream_reset )
+		(*m->ops->stream_reset)(m->priv);
 }
 
 static void play_error(netstatus_t ns, void *priv,
@@ -526,8 +473,6 @@ static void play_error(netstatus_t ns, void *priv,
 void mayhem_close(mayhem_t m)
 {
 	if ( m ) {
-		flv_close(m->flv);
-		free(m->bitch);
 		netstatus_free(m->ns);
 		rtmp_close(m->rtmp);
 		free(m);
@@ -547,12 +492,12 @@ int mayhem_pump(mayhem_t m)
 	case MAYHEM_STATE_CONNECTED:
 	case MAYHEM_STATE_AUTHORIZED:
 	case MAYHEM_STATE_GOT_STREAM:
+	case MAYHEM_STATE_FROZEN:
 		/* I don't sleep, I wait */
 		break;
 	case MAYHEM_STATE_PLAYING:
 		/* let the good times roll */
 		break;
-	case MAYHEM_STATE_FROZEN:
 	case MAYHEM_STATE_ABORT:
 		printf("mayhem: fuck this shit!\n");
 		mayhem_abort(m);
@@ -565,15 +510,14 @@ int mayhem_pump(mayhem_t m)
 	return (m->state != MAYHEM_STATE_ABORT);
 }
 
-mayhem_t mayhem_connect(wmvars_t vars)
+mayhem_t mayhem_connect(wmvars_t vars, const struct mayhem_ops *ops, void *priv)
 {
 	struct _mayhem *m;
-	static const struct rtmp_ops ops = {
+	static const struct rtmp_ops rtmp_ops = {
 		.invoke = invoke,
 		.notify = notify,
 		.audio = rip,
 		.video = rip,
-		.stream_start = stream_start,
 		.read_report_sent = checkup,
 	};
 	static const struct netstream_ops ns_ops = {
@@ -592,6 +536,8 @@ mayhem_t mayhem_connect(wmvars_t vars)
 	if ( NULL == m )
 		goto out;
 
+	m->ops = ops;
+	m->priv = priv;
 	m->sid = vars->sid;
 
 	m->rtmp = rtmp_connect(vars->tcUrl);
@@ -602,7 +548,7 @@ mayhem_t mayhem_connect(wmvars_t vars)
 	if ( NULL == m->ns )
 		goto out_free_rtmp;
 
-	rtmp_set_handlers(m->rtmp, &ops, m);
+	rtmp_set_handlers(m->rtmp, &rtmp_ops, m);
 	netstatus_stream_ops(m->ns, &ns_ops, m);
 	netstatus_connect_ops(m->ns, &nc_ops, m);
 
