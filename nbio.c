@@ -19,6 +19,8 @@
 #include <string.h>
 #include <list.h>
 #include <assert.h>
+
+#include <os.h>
 #include <nbio.h>
 
 static struct eventloop *ev_list;

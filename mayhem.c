@@ -5,6 +5,9 @@
 #include <wmdump.h>
 #include <wmvars.h>
 
+#include <os.h>
+#include <list.h>
+#include <nbio.h>
 #include <rtmp/amf.h>
 #include <rtmp/rtmp.h>
 #include <rtmp/proto.h>
@@ -26,6 +29,7 @@
 struct _mayhem {
 	rtmp_t rtmp;
 	netstatus_t ns;
+	wmvars_t vars;
 	const struct mayhem_ops *ops;
 	void *priv;
 	unsigned int state;
@@ -35,6 +39,10 @@ struct _mayhem {
 void mayhem_abort(mayhem_t m)
 {
 	m->state = MAYHEM_STATE_ABORT;
+	rtmp_close(m->rtmp);
+	netstatus_free(m->ns);
+	m->ns = NULL;
+	m->rtmp = NULL;
 }
 
 static int i_auth(mayhem_t m, invoke_t inv)
@@ -409,7 +417,7 @@ static void checkup(void *priv, uint32_t ts)
 }
 
 /* NetConnection callbacks */
-static void connected(netstatus_t ns, void *priv)
+static void stream_connected(netstatus_t ns, void *priv)
 {
 	struct _mayhem *m = priv;
 
@@ -469,6 +477,43 @@ static void play_error(netstatus_t ns, void *priv,
 	mayhem_abort(m);
 }
 
+static void rtmp_connected(void *priv)
+{
+	static const struct netstream_ops ns_ops = {
+		.start = start,
+		.stop = stop,
+		.reset = reset,
+		.error = play_error,
+	};
+	static const struct netconn_ops nc_ops = {
+		.connected = stream_connected,
+		.stream_created = stream_created,
+		.error = connect_error,
+	};
+	struct _mayhem *m = priv;
+
+	m->ns = netstatus_new(m->rtmp, 3, 0);
+	if ( NULL == m->ns )
+		goto out_free_rtmp;
+	netstatus_stream_ops(m->ns, &ns_ops, m);
+	netstatus_connect_ops(m->ns, &nc_ops, m);
+
+	if ( !invoke_connect(m, m->vars) )
+		goto out_free_netstatus;
+
+	return;
+out_free_netstatus:
+	netstatus_free(m->ns);
+out_free_rtmp:
+	rtmp_close(m->rtmp);
+}
+
+static void rtmp_died(void *priv)
+{
+	struct _mayhem *m = priv;
+	mayhem_abort(m);
+}
+
 /* Constructor/destructor */
 void mayhem_close(mayhem_t m)
 {
@@ -479,38 +524,8 @@ void mayhem_close(mayhem_t m)
 	}
 }
 
-int mayhem_pump(mayhem_t m)
-{
-	if ( m->state == MAYHEM_STATE_ABORT )
-		return 0;
-
-	if ( !rtmp_pump(m->rtmp) )
-		mayhem_abort(m);
-
-	switch(m->state) {
-	case MAYHEM_STATE_CONNECTING:
-	case MAYHEM_STATE_CONNECTED:
-	case MAYHEM_STATE_AUTHORIZED:
-	case MAYHEM_STATE_GOT_STREAM:
-	case MAYHEM_STATE_FROZEN:
-		/* I don't sleep, I wait */
-		break;
-	case MAYHEM_STATE_PLAYING:
-		/* let the good times roll */
-		break;
-	case MAYHEM_STATE_ABORT:
-		printf("mayhem: fuck this shit!\n");
-		mayhem_abort(m);
-		break;
-	default:
-		printf("ugh? %d\n", m->state);
-		abort();
-	}
-
-	return (m->state != MAYHEM_STATE_ABORT);
-}
-
-mayhem_t mayhem_connect(wmvars_t vars, const struct mayhem_ops *ops, void *priv)
+mayhem_t mayhem_connect(struct iothread *t, wmvars_t vars,
+			const struct mayhem_ops *ops, void *priv)
 {
 	struct _mayhem *m;
 	static const struct rtmp_ops rtmp_ops = {
@@ -519,17 +534,8 @@ mayhem_t mayhem_connect(wmvars_t vars, const struct mayhem_ops *ops, void *priv)
 		.audio = rip,
 		.video = rip,
 		.read_report_sent = checkup,
-	};
-	static const struct netstream_ops ns_ops = {
-		.start = start,
-		.stop = stop,
-		.reset = reset,
-		.error = play_error,
-	};
-	static const struct netconn_ops nc_ops = {
-		.connected = connected,
-		.stream_created = stream_created,
-		.error = connect_error,
+		.conn_reset = rtmp_died,
+		.connected = rtmp_connected,
 	};
 
 	m = calloc(1, sizeof(*m));
@@ -538,34 +544,16 @@ mayhem_t mayhem_connect(wmvars_t vars, const struct mayhem_ops *ops, void *priv)
 
 	m->ops = ops;
 	m->priv = priv;
+	m->vars = vars;
 	m->sid = vars->sid;
 
-	m->rtmp = rtmp_connect(vars->tcUrl);
+	m->rtmp = rtmp_connect(t, vars->tcUrl, &rtmp_ops, m);
 	if ( NULL == m->rtmp )
 		goto out_free;
 
-	m->ns = netstatus_new(m->rtmp, 3, 0);
-	if ( NULL == m->ns )
-		goto out_free_rtmp;
-
-	rtmp_set_handlers(m->rtmp, &rtmp_ops, m);
-	netstatus_stream_ops(m->ns, &ns_ops, m);
-	netstatus_connect_ops(m->ns, &nc_ops, m);
-
-	if ( !invoke_connect(m, vars) )
-		goto out_free_netstatus;
-
-	while( m->state != MAYHEM_STATE_CONNECTED ) {
-		if ( !mayhem_pump(m) )
-			goto out_free_netstatus;
-	}
-
 	/* success */
 	goto out;
-out_free_netstatus:
-	netstatus_free(m->ns);
-out_free_rtmp:
-	rtmp_close(m->rtmp);
+
 out_free:
 	free(m);
 	m = NULL;

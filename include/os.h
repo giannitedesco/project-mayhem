@@ -20,4 +20,6 @@ void sock_close(os_sock_t sock);
 int sock_blocking(os_sock_t s, int b);
 const char *sock_err(void);
 
+void os_reseed_rand(void);
+
 #endif /* _WMDUMP_OS_H */

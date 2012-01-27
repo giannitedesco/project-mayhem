@@ -14,13 +14,6 @@
 #include <nbio.h>
 #include <nbio-connecter.h>
 
-#ifndef SOCK_NONBLOCK
-#define FCNTL_NONBLOCK 1
-#define SOCK_NONBLOCK 0
-#else
-#define FCNTL_NONBLOCK 0
-#endif
-
 struct connecter {
 	struct nbio io;
 	connect_cbfn_t cb;
@@ -74,33 +67,16 @@ static const struct nbio_ops c_ops = {
 	.dtor = connect_dtor,
 };
 
-int connecter(struct iothread *t, int type, int proto,
-				uint32_t addr, uint16_t port,
+int connecter(struct iothread *t, const char *addr, uint16_t port,
 				connect_cbfn_t cb, void *priv)
 {
-	struct sockaddr_in sa;
 	struct connecter *c;
-	int s;
+	os_sock_t s;
 
-
-	s = socket(PF_INET, type | SOCK_NONBLOCK, proto);
-	if ( s < 0 ) {
-		fprintf(stderr, "connecter: socket: %s\n", sock_err());
-		return 0;
-	}
-
-#if FCNTL_NONBLOCK
-	if ( !fd_block(s, 0) ) {
-		sock_close(s);
-		return 0;
-	}
-#endif
-
-	sa.sin_family = AF_INET;
-	sa.sin_addr.s_addr = addr;
-	sa.sin_port = htons(port);
-	if ( !connect(s, (struct sockaddr *)&sa, sizeof(sa)) ) {
+	s = sock_connect(addr, port);
+	if ( s != BAD_SOCKET ) {
 		(*cb)(t, s, priv);
+		return 1;
 	}
 
 	if ( errno != EINPROGRESS ) {

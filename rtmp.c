@@ -4,13 +4,12 @@
 */
 #include <wmdump.h>
 #include <os.h>
+#include <list.h>
+#include <nbio.h>
+#include <nbio-connecter.h>
 #include <rtmp/amf.h>
 #include <rtmp/rtmp.h>
 #include <rtmp/proto.h>
-
-#include <unistd.h>
-#include <sys/types.h>
-#include <time.h>
 
 #include "amfbuf.h"
 
@@ -19,7 +18,7 @@
 #define STATE_CONN_RESET	2
 #define STATE_HANDSHAKE_1	3
 #define STATE_HANDSHAKE_2	4
-#define STATE_CONNECTED		4 /* equivalent to handshake_2 */
+#define STATE_READY		5
 
 /* send read updates every 1MB */
 #define UPDATE_FREQUENCY	(1 << 20)
@@ -37,16 +36,20 @@ struct rtmp_chan {
 };
 
 struct _rtmp {
+	struct nbio io;
+	struct iothread *t;
+
 	uint8_t *r_buf;
 	uint8_t *r_cur;
 	const struct rtmp_ops *ev_ops;
 	void *ev_priv;
 	size_t chunk_sz;
 	size_t r_space;
-	unsigned int state;
+	uint8_t state;
+	uint8_t killed;
+	uint8_t conn_reset;
 	uint32_t server_bw;
 	uint32_t client_bw;
-	os_sock_t sock;
 	uint8_t client_bw2;
 	uint32_t nbytes;
 	uint32_t nbytes_update;
@@ -62,9 +65,16 @@ static int rtmp_send_raw(struct _rtmp *r, const uint8_t *buf, size_t len)
 	ssize_t ret;
 
 	for(end = buf + len; buf < end; buf++) {
-		ret = sock_send(r->sock, buf, end - buf);
-		if ( ret < 0 )
+		ret = sock_send(r->io.fd, buf, end - buf);
+		if ( ret < 0 ) {
+			if ( errno == EAGAIN ) {
+				dprintf("rtmp: Sleep on write\n");
+				nbio_inactive(r->t, &r->io, NBIO_WRITE);
+				return 0;
+			}
+			printf("rtmp: sock_send: %s\n", sock_err());
 			return transition(r, STATE_ABORT);
+		}
 		if ( ret == 0 )
 			return transition(r, STATE_CONN_RESET);
 
@@ -265,9 +275,9 @@ static int handshake1(struct _rtmp *r)
 	if ( !rbuf_request_size(r, RTMP_HANDSHAKE_LEN * 2 + 1) )
 		return 0;
 
-	srand(time(NULL) ^ getpid());
-
 	buf[0] = 3;
+
+	os_reseed_rand();
 
 	for(i = 1; i < sizeof(buf); i++)
 		buf[i] = rand();
@@ -282,6 +292,7 @@ static int handshake1(struct _rtmp *r)
 		return 0;
 
 	dprintf("rtmp: sent handshake 1\n");
+	nbio_set_wait(r->t, &r->io, NBIO_READ);
 	return 1;
 }
 
@@ -308,6 +319,13 @@ static int handshake2(struct _rtmp *r)
 		return 0;
 
 	dprintf("rtmp: sent handshake 2\n");
+	return transition(r, STATE_READY);
+}
+
+static int ready(struct _rtmp *r)
+{
+	if ( r->ev_ops && r->ev_ops->connected )
+		(*r->ev_ops->connected)(r->ev_priv);
 	return 1;
 }
 
@@ -693,10 +711,12 @@ static ssize_t rtmp_drain_buf(struct _rtmp *r)
 	case STATE_HANDSHAKE_1:
 		ret = handshake1_resp(r, buf, sz);
 		break;
-	case STATE_CONNECTED:
+	case STATE_HANDSHAKE_2:
+	case STATE_READY:
 		ret = decode_rtmp(r, buf, sz);
 		break;
 	default:
+		printf("bad state %d\n", r->state);
 		abort();
 	}
 
@@ -707,9 +727,16 @@ static int fill_rcv_buf(struct _rtmp *r)
 {
 	ssize_t ret;
 	assert(r->r_space);
-	ret = sock_recv(r->sock, r->r_cur, r->r_space);
-	if ( ret < 0 )
+	ret = sock_recv(r->io.fd, r->r_cur, r->r_space);
+	if ( ret < 0 ) {
+		if ( errno == EAGAIN ) {
+			dprintf("rtmp: Sleep on read\n");
+			nbio_inactive(r->t, &r->io, NBIO_READ);
+			return 0;
+		}
+		printf("rtmp: sock_recv: %s\n", sock_err());
 		return transition(r, STATE_ABORT);
+	}
 	if ( ret == 0 )
 		return transition(r, STATE_CONN_RESET);
 
@@ -721,19 +748,19 @@ static int fill_rcv_buf(struct _rtmp *r)
 	return 1;
 }
 
-int rtmp_pump(rtmp_t r)
+static void rtmp_pump(rtmp_t r)
 {
 	ssize_t taken;
 
 again:
 	taken = rtmp_drain_buf(r);
 	if ( !taken )
-		return 0;
+		return;
 
 	/* need more data? */
 	if ( taken < 0 ) {
 		if ( !fill_rcv_buf(r) )
-			return 0;
+			return;
 		goto again;
 	}
 
@@ -754,50 +781,100 @@ again:
 	if ( r->chunk_sz != (current_buf_sz(r) - RTMP_HDR_MAX_SZ) &&
 		r->chunk_sz >= (size_t)(r->r_cur - r->r_buf) ) {
 		if ( !rbuf_update_size(r) )
-			return 0;
+			return;
 	}
 
-	return 1;
+	return;
 }
 
-rtmp_t rtmp_connect(const char *tcUrl)
+static void iop_read(struct iothread *t, struct nbio *io)
+{
+	struct _rtmp *r = (struct _rtmp *)io;
+	rtmp_pump(r);
+}
+
+static void iop_write(struct iothread *t, struct nbio *io)
+{
+	struct _rtmp *r = (struct _rtmp *)io;
+	transition(r, r->state);
+}
+
+static void rtmp_dtor(struct _rtmp *r)
+{
+	unsigned int i;
+	for(i = 0; i < RTMP_MAX_CHANNELS; i++) {
+		free(r->chan[i].p_buf);
+	}
+	free(r->r_buf);
+	sock_close(r->io.fd);
+	r->io.fd = BAD_SOCKET;
+	free(r);
+}
+
+static void iop_dtor(struct iothread *t, struct nbio *io)
+{
+	struct _rtmp *r = (struct _rtmp *)io;
+	r->conn_reset = 1;
+	if ( r->killed )
+		rtmp_dtor(r);
+}
+
+static const struct nbio_ops iops = {
+	.read = iop_read,
+	.write = iop_write,
+	.dtor = iop_dtor,
+};
+
+static void conn_cb(struct iothread *t, os_sock_t s, void *priv)
+{
+	struct _rtmp *r = priv;
+
+	dprintf("rtmp: TCP connected\n");
+
+	if ( r->state == STATE_ABORT ) {
+		printf(".. connect cancelled\n");
+		rtmp_dtor(r);
+		return;
+	}
+
+	r->io.fd = s;
+	r->io.ops = &iops;
+	r->state = STATE_HANDSHAKE_1;
+	nbio_add(t, &r->io, NBIO_WRITE);
+	transition(r, STATE_HANDSHAKE_1);
+}
+
+rtmp_t rtmp_connect(struct iothread *t, const char *tcUrl,
+			const struct rtmp_ops *ops, void *priv)
 {
 	struct _rtmp *r;
 	char *name;
 	uint16_t port;
+	int ret;
 
 	r = calloc(1, sizeof(*r));
 	if ( NULL == r )
 		goto out;
 
-	r->sock = BAD_SOCKET;
+	r->t = t;
+	r->io.fd = BAD_SOCKET;
+	rtmp_set_handlers(r, ops, priv);
 
 	name = urlparse(tcUrl, &port);
 	if ( NULL == name )
 		goto out_free;
 
 	printf("rtmp: Connecting to: %s:%d\n", name, port);
-	r->sock = sock_connect(name, port);
-	//r->sock = sock_connect("127.0.0.1", port);
+	ret = connecter(t, name, port, conn_cb, r);
+	//ret = connecter(t, "127.0.0.1", port, conn_cb, r);
 	free(name);
-	if ( BAD_SOCKET == r->sock )
+
+	if ( !ret )
 		goto out_free;
-
-	if ( !transition(r, STATE_HANDSHAKE_1) )
-		goto out_close;
-
-	while ( r->state != STATE_CONNECTED ) {
-		if ( !rtmp_pump(r) ) {
-			goto out_close;
-		}
-	}
 
 	/* success */
 	goto out;
 
-out_close:
-	free(r->r_buf);
-	sock_close(r->sock);
 out_free:
 	free(r);
 	r = NULL;
@@ -808,13 +885,12 @@ out:
 void rtmp_close(rtmp_t r)
 {
 	if ( r ) {
-		unsigned int i;
-		for(i = 0; i < RTMP_MAX_CHANNELS; i++) {
-			free(r->chan[i].p_buf);
+		r->killed = 1;
+		if ( r->conn_reset ) {
+			rtmp_dtor(r);
+		}else{
+			nbio_del(r->t, &r->io);
 		}
-		free(r->r_buf);
-		sock_close(r->sock);
-		free(r);
 	}
 }
 
@@ -824,12 +900,17 @@ static int transition(struct _rtmp *r, unsigned int state)
 
 	switch(state) {
 	case STATE_ABORT:
-		printf("rtmp: aborted\n");
-		r->state = state;
-		return 0;
 	case STATE_CONN_RESET:
-		printf("rtmp: connection reset by peer\n");
+		if ( state == STATE_ABORT ) {
+			printf("rtmp: aborted\n");
+		}else{
+			printf("rtmp: connection reset by peer\n");
+		}
 		r->state = state;
+		if ( r->ev_ops )
+			(*r->ev_ops->conn_reset)(r->ev_priv);
+		r->conn_reset = 1;
+		nbio_del(r->t, &r->io);
 		return 0;
 	case STATE_HANDSHAKE_1:
 		ret = handshake1(r);
@@ -837,7 +918,11 @@ static int transition(struct _rtmp *r, unsigned int state)
 	case STATE_HANDSHAKE_2:
 		ret = handshake2(r);
 		break;
+	case STATE_READY:
+		ret = ready(r);
+		break;
 	default:
+		printf("Bad state %u\n", state);
 		abort();
 		break;
 	}

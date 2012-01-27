@@ -29,7 +29,7 @@ struct mayhem_ops {
 				const uint8_t *buf, size_t sz);
 };
 
-mayhem_t mayhem_connect(wmvars_t vars,
+mayhem_t mayhem_connect(struct iothread *t, wmvars_t vars,
 			const struct mayhem_ops *ops, void *priv);
 int mayhem_pump(mayhem_t m);
 void mayhem_abort(mayhem_t m);

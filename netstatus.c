@@ -9,6 +9,8 @@
 #include <wmdump.h>
 #include <wmvars.h>
 #include <os.h>
+#include <list.h>
+#include <nbio.h>
 
 #include <rtmp/amf.h>
 #include <rtmp/rtmp.h>

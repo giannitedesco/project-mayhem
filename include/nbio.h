@@ -10,7 +10,7 @@ typedef uint8_t nbio_flags_t;
 
 /* Represents a given fd */
 struct nbio {
-	int fd;
+	os_sock_t fd;
 #define NBIO_READ	(1<<0)
 #define NBIO_WRITE	(1<<1)
 #define NBIO_ERROR	(1<<2)

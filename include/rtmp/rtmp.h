@@ -27,13 +27,15 @@ struct rtmp_ops {
 			const uint8_t *buf, size_t len);
 	int(*stream_start)(void *priv);
 	void(*read_report_sent)(void *priv, uint32_t ts);
+	void(*connected)(void *priv);
+	void(*conn_reset)(void *priv);
 };
 
-rtmp_t rtmp_connect(const char *tcUrl);
+rtmp_t rtmp_connect(struct iothread *t, const char *tcUrl,
+			const struct rtmp_ops *ops, void *priv);
 int rtmp_invoke(rtmp_t r, int chan, uint32_t dest, invoke_t inv);
 int rtmp_flex_invoke(rtmp_t r, int chan, uint32_t dest, invoke_t inv);
 void rtmp_set_handlers(rtmp_t r, const struct rtmp_ops *ops, void *priv);
-int rtmp_pump(rtmp_t r);
 void rtmp_close(rtmp_t r);
 
 /* die die die */

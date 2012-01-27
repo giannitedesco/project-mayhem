@@ -12,6 +12,7 @@
 #include <errno.h>
 
 #include <list.h>
+#include <os.h>
 #include <nbio.h>
 
 struct poll_priv {

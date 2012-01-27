@@ -15,6 +15,7 @@
 #include <sys/epoll.h>
 #include <stdio.h>
 
+#include <os.h>
 #include <nbio.h>
 
 static int epoll_init(struct iothread *t)

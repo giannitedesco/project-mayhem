@@ -1,6 +1,9 @@
 #include <wmdump.h>
 #include <wmvars.h>
 #include <rtmp/amf.h>
+#include <os.h>
+#include <list.h>
+#include <nbio.h>
 #include <rtmp/rtmp.h>
 #include <mayhem.h>
 #include <flv.h>
@@ -56,7 +59,10 @@ static void NaiadAuthorize(void *priv, int code,
 static void NaiadFreeze(void *priv, int code, void *u1,
 				int u2, const char *desc)
 {
+	struct dumper *d = priv;
 	printf("NaiadFreeze: %d: %s\n", code, desc);
+	printf("%s: fuck this shit!\n", cmd);
+	mayhem_abort(d->mayhem);
 }
 
 static void rip(void *priv, struct rtmp_pkt *pkt,
@@ -103,7 +109,7 @@ static void reset(void *priv)
 	d->flv = NULL;
 }
 
-static int wmdump(const char *varfile)
+static struct dumper *dumper_new(struct iothread *t, const char *varfile)
 {
 	static const struct mayhem_ops ops = {
 		.NaiadAuthorize = NaiadAuthorize,
@@ -114,47 +120,73 @@ static int wmdump(const char *varfile)
 		.stream_stop = stop,
 		.stream_packet = rip,
 	};
-	struct dumper d;
+	struct dumper *d;
 	wmvars_t v;
-	int ret = 0;
 
 	v = wmvars_parse(varfile);
 	if ( NULL == v )
 		goto out;
 
 	memset(&d, 0, sizeof(d));
-	d.mayhem = mayhem_connect(v, &ops, &d);
-	if ( NULL == d.mayhem )
+	d = calloc(1, sizeof(*d));
+	if ( NULL == d )
 		goto out_free_vars;
 
-	while( mayhem_pump(d.mayhem) )
-		/* do nothing */;
+	d->mayhem = mayhem_connect(t, v, &ops, d);
+	if ( NULL == d->mayhem )
+		goto out_free;
 
-	printf("success\n");
-	ret = 1;
+	return d;
 
-	flv_close(d.flv);
-	free(d.bitch);
-	free((char *)d.room.topic);
-	mayhem_close(d.mayhem);
+out_free:
+	free(d);
 out_free_vars:
 	wmvars_free(v);
 out:
-	return ret;
+	return NULL;
+}
+
+static void dumper_close(struct dumper *d)
+{
+	if ( d ) {
+		flv_close(d->flv);
+		free(d->bitch);
+		free((char *)d->room.topic);
+		mayhem_close(d->mayhem);
+		free(d);
+	}
 }
 
 int main(int argc, char **argv)
 {
+	struct iothread iothread;
+	const char *plugin = NULL;
+	struct dumper *d;
+
 	setvbuf(stdout, (char *) NULL, _IOLBF, 0);
 
+	cmd = argv[0];
 	if ( argc < 2 ) {
-		fprintf(stderr, "Usage:\t%s <varfile>\n", argv[0]);
+		fprintf(stderr, "Usage:\t%s <varfile>\n", cmd);
 		return EXIT_FAILURE;
 	}
 
-	cmd = argv[0];
-	if ( !wmdump(argv[1]) )
+	if ( !nbio_init(&iothread, plugin) )
 		return EXIT_FAILURE;
 
+	printf("%s: Using %s eventloop plugin\n",
+		cmd, iothread.plugin->name);
+
+	d = dumper_new(&iothread, argv[1]);
+	if ( NULL == d )
+		return EXIT_FAILURE;
+
+	do{
+		nbio_pump(&iothread, -1);
+	}while( !list_empty(&iothread.active) );
+
+	dumper_close(d);
+
+	printf("success\n");
 	return EXIT_SUCCESS;
 }

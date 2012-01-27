@@ -6,12 +6,19 @@
 #include <os.h>
 
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <netinet/in.h>
 #include <arpa/inet.h> /* inet_aton(3) */
 #include <netdb.h>
 #include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <time.h>
+
+void os_reseed_rand(void)
+{
+	srand(time(NULL) ^ getpid());
+}
 
 const char *sock_err(void)
 {
@@ -44,13 +51,19 @@ os_sock_t sock_connect(const char *ip, uint16_t port)
 	memcpy(&sa.sin_addr, h->h_addr, sizeof(sa.sin_addr));
 	sa.sin_port = htons(port);
 
-	s = socket(PF_INET, SOCK_STREAM, 0);
+	s = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if ( s < 0 ) {
 		fprintf(stderr, "socket: %s\n", strerror(errno));
 		goto out;
 	}
 
-	if ( connect(s, (struct sockaddr *)&sa, sizeof(sa)) ) {
+	if ( !sock_blocking(s, 0) ) {
+		sock_close(s);
+		return 0;
+	}
+
+	if ( connect(s, (struct sockaddr *)&sa, sizeof(sa)) &&
+			errno != EINPROGRESS ) {
 		fprintf(stderr, "connect: %s\n", strerror(errno));
 		goto out_close;
 	}
