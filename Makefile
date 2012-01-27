@@ -35,7 +35,8 @@ endif
 
 # the obvious
 EXTRA_DEFS := -D_FILE_OFFSET_BITS=64 $(OS_DEFS)
-CFLAGS := -g -pipe -O2 -Wall \
+WFLAGS := \
+	-Wall \
 	-Wsign-compare -Wcast-align \
 	-Waggregate-return \
 	-Wstrict-prototypes \
@@ -44,9 +45,13 @@ CFLAGS := -g -pipe -O2 -Wall \
 	-Wmissing-noreturn \
 	-finline-functions \
 	-Wmissing-format-attribute \
-	-fwrapv \
-	-Iinclude \
-	$(EXTRA_DEFS)
+	-Iinclude
+
+ifeq ($(HAVE_PYTHON), yes)
+CFLAGS := $(PYTHON_CFLAGS) $(EXTRA_DEFS) $(WFLAGS) -fPIC
+else
+CFLAGS := -g -pipe -O2 $(EXTRA_DEFS) $(WFLAGS)
+endif
 
 ifeq ($(OS), win32)
 OS_OBJ := blob_win32.o os-win32.o
@@ -54,41 +59,51 @@ else
 OS_OBJ := blob.o os-posix.o
 endif
 
+# Internal "static libraries"
 NBIO_OBJ := nbio.o nbio-connecter.o $(NBIO_MOD)
+AMF_OBJ := amf3.o \
+		amf.o \
+		hexdump.o
+MAYHEM_OBJ := $(AMF_OBJ) \
+		$(NBIO_OBJ) \
+		cvars.o \
+		netstatus.o \
+		rtmp.o \
+		flv.o \
+		mayhem.o \
+		mayhem-amf.o
 
+### Targets and their objects
 AMFPARSE_BIN := amfparse$(SUFFIX)
 AMFPARSE_LIBS :=
 AMFPARSE_OBJ := $(OS_OBJ) \
-		amf3.o \
-		amf.o \
-		hexdump.o \
+		$(AMF_OBJ) \
 		amfparse.o
 
 DUMP_BIN := wmdump$(SUFFIX)
 DUMP_LIBS := 
 DUMP_OBJ := $(OS_OBJ) \
-		$(NBIO_OBJ) \
-		cvars.o \
-		hexdump.o \
-		netstatus.o \
-		rtmp.o \
-		amf3.o \
-		amf.o \
-		flv.o \
-		mayhem.o \
-		mayhem-amf.o \
+		$(MAYHEM_OBJ) \
 		dump.o
 
+PYPM_LIB := mayhem$(LIBSUFFIX)
+PYPM_LIBS := $(PYTHON_LDFLAGS)
+PYPM_OBJ := $(OS_OBJ) \
+		$(MAYHEM_OBJ) \
+		pypm.o \
+		pymayhem.o
+
 ALL_BIN := $(DUMP_BIN) $(AMFPARSE_BIN)
-ALL_OBJ := $(DUMP_OBJ) $(AMFPARSE_OBJ)
+ALL_LIB := $(PYPM_LIB)
+ALL_OBJ := $(DUMP_OBJ) $(AMFPARSE_OBJ) $(PYPM_OBJ)
 ALL_DEP := $(patsubst %.o, .%.d, $(ALL_OBJ))
-ALL_TARGETS := $(ALL_BIN)
+ALL_TARGETS := $(ALL_BIN) $(ALL_LIB)
 
 TARGET: all
 
 .PHONY: all clean
 
-all: $(ALL_BIN)
+all: $(ALL_TARGETS)
 
 # if clean is one of the goals, make sure clean comes before everything else
 ifeq ($(filter clean, $(MAKECMDGOALS)),clean)
@@ -111,6 +126,10 @@ $(DUMP_BIN): $(DUMP_OBJ)
 $(AMFPARSE_BIN): $(AMFPARSE_OBJ)
 	@echo " [LINK] $@"
 	@$(CC) $(CFLAGS) -o $@ $(AMFPARSE_OBJ) $(AMFPARSE_LIBS)
+
+$(PYPM_LIB): $(PYPM_OBJ)
+	@echo " [LINK] $@"
+	@$(CC) $(CFLAGS) -shared -o $@ $(PYPM_OBJ) $(PYPM_LIBS)
 
 clean:
 	$(RM) -f $(ALL_TARGETS) $(ALL_OBJ) $(ALL_DEP)

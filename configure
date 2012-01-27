@@ -10,13 +10,16 @@ suffix=""
 case "$sname" in
 	Linux|linux)
 		os=linux
+		libsuffix=.so
 		;;
 	Darwin)
 		os=osx
+		libsuffix=.so
 		;;
 	MINGW*)
 		os=win32
 		suffix=.exe
+		libsuffix=.dll
 		;;
 	*)
 		echo "Unsupported OS: $sname"
@@ -24,4 +27,16 @@ case "$sname" in
 esac
 echo "Detected kernel: $os"
 echo "SUFFIX := ${suffix}" >> ${config}
+echo "LIBSUFFIX := ${libsuffix}" >> ${config}
 echo "OS := ${os}" >> ${config}
+
+py_cflags=`python-config --cflags`
+if test \! $? -eq 0; then
+	echo "No python for you!"
+	echo "HAVE_PYTHON := no" >> ${config}
+else
+	py_ldflags=`python-config --libs`
+	echo "HAVE_PYTHON := yes" >> ${config}
+	echo "PYTHON_CFLAGS := ${py_cflags}" >> ${config}
+	echo "PYTHON_LDFLAGS := ${py_ldflags}" >> ${config}
+fi
