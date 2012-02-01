@@ -1,0 +1,17 @@
+from idl import Struct, FixedBuffer, CFiles, UInt8, UInt32, Int
+
+rtmp_pkt = Struct('struct rtmp_pkt', 'rtmp_pkt', 'pypm', [
+		Int('chan'),
+		UInt32('dest'),
+		UInt32('ts'),
+		UInt8('type'),
+	])
+
+c = CFiles('pyrtmp_pkt', [rtmp_pkt])
+c.include('pypm.h', system = False)
+c.include('os.h', system = True)
+c.include('list.h', system = True)
+c.include('nbio.h', system = True)
+c.include('rtmp/amf.h', system = True)
+c.include('rtmp/rtmp.h', system = True)
+c.write()

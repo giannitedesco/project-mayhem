@@ -1,6 +1,6 @@
 from idl import Struct, FixedBuffer, UInt, Synthetic, CFiles, String
 
-shdr = Struct('struct _wmvars', 'vars', 'pypm', [
+vars = Struct('struct _wmvars', 'vars', 'pypm', [
 		String('pageurl'),
 		String('tcUrl'),
 		String('signupargs'),
@@ -18,7 +18,7 @@ shdr = Struct('struct _wmvars', 'vars', 'pypm', [
 		UInt('hd'),
 	])
 
-c = CFiles('pyvars', [shdr])
+c = CFiles('pyvars', [vars])
 c.include('pypm.h', system = False)
 c.include('cvars.h', system = False)
 c.write()

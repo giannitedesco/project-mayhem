@@ -11,3 +11,5 @@ Config.mak
 .*.swp
 pyvars.c
 pyvars.h
+pyrtmp_pkt.c
+pyrtmp_pkt.h

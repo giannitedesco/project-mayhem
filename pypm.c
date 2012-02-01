@@ -20,6 +20,7 @@
 
 /* IDL generated code */
 #include "pyvars.h"
+#include "pyrtmp_pkt.h"
 
 /* Exception hierarchy */
 static PyObject *pymayhem_err_base;
@@ -85,6 +86,36 @@ int idl__set_uint(unsigned int *ref, PyObject *val)
 	return ret;
 }
 
+int idl__set_u32(uint32_t *ref, PyObject *val)
+{
+	unsigned long num;
+	int ret;
+	ret = set_number(&num, val);
+	if ( !ret )
+		*ref = num;
+	return ret;
+}
+
+int idl__set_u8(uint8_t *ref, PyObject *val)
+{
+	unsigned long num;
+	int ret;
+	ret = set_number(&num, val);
+	if ( !ret )
+		*ref = num;
+	return ret;
+}
+
+int idl__set_int(int *ref, PyObject *val)
+{
+	unsigned long num;
+	int ret;
+	ret = set_number(&num, val);
+	if ( !ret )
+		*ref = num;
+	return ret;
+}
+
 int idl__set_str(char **ref, PyObject *val)
 {
 	if ( NULL == val || val == Py_None ) {
@@ -109,16 +140,6 @@ int idl__set_str(char **ref, PyObject *val)
 	return -1;
 }
 
-int idl__set_int(int *ref, PyObject *val)
-{
-	unsigned long num;
-	int ret;
-	ret = set_number(&num, val);
-	if ( !ret )
-		*ref = num;
-	return ret;
-}
-
 #define PYMAYHEM_INT_CONST(m, c) PyModule_AddIntConstant(m, #c, c)
 PyMODINIT_FUNC initmayhem(void);
 PyMODINIT_FUNC initmayhem(void)
@@ -128,6 +149,8 @@ PyMODINIT_FUNC initmayhem(void)
 	if ( PyType_Ready(&mayhem_pytype) < 0 )
 		return;
 	if ( PyType_Ready(&pypm_vars_pytype) < 0 )
+		return;
+	if ( PyType_Ready(&pypm_rtmp_pkt_pytype) < 0 )
 		return;
 
 	pymayhem_err_base = PyErr_NewException(PACKAGE ".Error",
@@ -149,4 +172,5 @@ PyMODINIT_FUNC initmayhem(void)
 	PyModule_AddObject(m, "Error", pymayhem_err_base);
 	PyModule_AddObject(m, "mayhem", (PyObject *)&mayhem_pytype);
 	PyModule_AddObject(m, "vars", (PyObject *)&pypm_vars_pytype);
+	PyModule_AddObject(m, "rtmp_pkt", (PyObject *)&pypm_rtmp_pkt_pytype);
 }

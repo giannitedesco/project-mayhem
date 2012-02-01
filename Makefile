@@ -92,6 +92,7 @@ PYPM_OBJ := $(OS_OBJ) \
 		$(MAYHEM_OBJ) \
 		pypm.o \
 		pyvars.o \
+		pyrtmp_pkt.o \
 		pymayhem.o
 
 ALL_BIN := $(DUMP_BIN) $(AMFPARSE_BIN)
@@ -100,7 +101,7 @@ ALL_OBJ := $(DUMP_OBJ) $(AMFPARSE_OBJ) $(PYPM_OBJ)
 ALL_DEP := $(patsubst %.o, .%.d, $(ALL_OBJ))
 ALL_TARGETS := $(ALL_BIN) $(ALL_LIB)
 
-ALL_IDL := pyvars.idl
+ALL_IDL := pyvars.idl pyrtmp_pkt.idl
 
 ALL_GEN_HEADERS := $(patsubst %.idl, %.h, $(ALL_IDL))
 ALL_GEN := $(ALL_GEN_HEADERS) $(patsubst %.idl, %.c, $(ALL_IDL))

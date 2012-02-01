@@ -44,6 +44,22 @@ class UInt(Scalar):
 	def set(self, ref, val):
 		return 'idl__set_uint(%s, %s)'%(ref, val)
 
+class UInt32(Scalar):
+	def __init__(self, name, **kw):
+		Scalar.__init__(self, name, **kw)
+	def get(self, ref):
+		return 'PyInt_FromLong(%s)'%ref
+	def set(self, ref, val):
+		return 'idl__set_u32(%s, %s)'%(ref, val)
+
+class UInt8(Scalar):
+	def __init__(self, name, **kw):
+		Scalar.__init__(self, name, **kw)
+	def get(self, ref):
+		return 'PyInt_FromLong(%s)'%ref
+	def set(self, ref, val):
+		return 'idl__set_u8(%s, %s)'%(ref, val)
+
 class FixedBuffer(Scalar):
 	def __init__(self, name, sz, **kw):
 		Scalar.__init__(self, name, **kw)

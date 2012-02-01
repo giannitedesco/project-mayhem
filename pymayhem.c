@@ -18,10 +18,17 @@
 
 struct pymayhem {
 	PyObject_HEAD;
+	mayhem_t mayhem;
 };
 
 static int pymayhem_init(struct pymayhem *self, PyObject *args, PyObject *kwds)
 {
+#if 0
+	PyObject *ret;
+	ret = PyObject_CallMethod((PyObject *)self, "boo", "s", "Hello world");
+	if ( NULL == ret )
+		return -1;
+#endif
 	return 0;
 }
 
@@ -32,8 +39,8 @@ static void pymayhem_dealloc(struct pymayhem *self)
 
 static PyMethodDef pymayhem_methods[] = {
 #if 0
-	{"rawdata",(PyCFunction)pymayhem_rawdata, METH_VARARGS,
-		"elf.rawdata(shdr) - Get raw file data"},
+	{"abort",(PyCFunction)pymayhem_abort, METH_VARARGS,
+		"mayhem.abort() - Abort"},
 #endif
 	{NULL, }
 };
@@ -49,7 +56,7 @@ PyTypeObject mayhem_pytype = {
 	PyObject_HEAD_INIT(NULL)
 	.tp_name = PACKAGE ".mayhem",
 	.tp_basicsize = sizeof(struct pymayhem),
-	.tp_flags = Py_TPFLAGS_DEFAULT,
+	.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
 	.tp_new = PyType_GenericNew,
 	.tp_init = (initproc)pymayhem_init,
 	.tp_dealloc = (destructor)pymayhem_dealloc,
