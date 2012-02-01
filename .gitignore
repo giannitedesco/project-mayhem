@@ -1,9 +1,13 @@
 .*.d
 *.o
 *.pyc
-mayhem
-mayhem.exe
+wmdump
+wmdump.exe
+mayhem.so
+mayhem.dll
 amfparse
 amfparse.exe
 Config.mak
 .*.swp
+pyvars.c
+pyvars.h

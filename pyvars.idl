@@ -1,0 +1,24 @@
+from idl import Struct, FixedBuffer, UInt, Synthetic, CFiles, String
+
+shdr = Struct('struct _wmvars', 'vars', 'pypm', [
+		String('pageurl'),
+		String('tcUrl'),
+		String('signupargs'),
+		String('sessiontype'),
+		String('nickname'),
+		String('sakey'),
+		String('g'),
+		String('ldmov'),
+		String('lang'),
+		String('sk'),
+		UInt('sid'),
+		UInt('srv'),
+		UInt('pid'),
+		UInt('ft'),
+		UInt('hd'),
+	])
+
+c = CFiles('pyvars', [shdr])
+c.include('pypm.h', system = False)
+c.include('cvars.h', system = False)
+c.write()

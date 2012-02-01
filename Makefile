@@ -91,6 +91,7 @@ PYPM_LIBS := $(PYTHON_LDFLAGS)
 PYPM_OBJ := $(OS_OBJ) \
 		$(MAYHEM_OBJ) \
 		pypm.o \
+		pyvars.o \
 		pymayhem.o
 
 ALL_BIN := $(DUMP_BIN) $(AMFPARSE_BIN)
@@ -99,11 +100,19 @@ ALL_OBJ := $(DUMP_OBJ) $(AMFPARSE_OBJ) $(PYPM_OBJ)
 ALL_DEP := $(patsubst %.o, .%.d, $(ALL_OBJ))
 ALL_TARGETS := $(ALL_BIN) $(ALL_LIB)
 
-TARGET: all
+ALL_IDL := pyvars.idl
+
+ALL_GEN_HEADERS := $(patsubst %.idl, %.h, $(ALL_IDL))
+ALL_GEN := $(ALL_GEN_HEADERS) $(patsubst %.idl, %.c, $(ALL_IDL))
 
 .PHONY: all clean
 
+TARGET: all
+
 all: $(ALL_TARGETS)
+
+# pypm.c includes generated headers so make sure they're made first
+pypm.o: pypm.c $(ALL_GEN_HEADERS)
 
 # if clean is one of the goals, make sure clean comes before everything else
 ifeq ($(filter clean, $(MAKECMDGOALS)),clean)
@@ -119,6 +128,10 @@ endif
 		-MT $(patsubst .%.d, %.o, $@) \
 		-c -o $(patsubst .%.d, %.o, $@) $<
 
+# generate C files from IDL's
+%.c %.h: %.idl
+	@python $<
+
 $(DUMP_BIN): $(DUMP_OBJ)
 	@echo " [LINK] $@"
 	@$(CC) $(CFLAGS) -o $@ $(DUMP_OBJ) $(DUMP_LIBS)
@@ -132,7 +145,7 @@ $(PYPM_LIB): $(PYPM_OBJ)
 	@$(CC) $(CFLAGS) -shared -o $@ $(PYPM_OBJ) $(PYPM_LIBS)
 
 clean:
-	$(RM) -f $(ALL_TARGETS) $(ALL_OBJ) $(ALL_DEP)
+	$(RM) -f $(ALL_TARGETS) $(ALL_OBJ) $(ALL_DEP) $(ALL_GEN)
 
 # clean everything and delete config too
 mrproper: clean
