@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-import pymayhem as mayhem
+import pymayhem
 from urlparse import urlparse
 import httplib
 
@@ -17,7 +17,7 @@ def main(argv):
 		html = r.read()
 
 		print '$PageUrl:', url
-		h = mayhem.WebParser()
+		h = pymayhem.WebParser()
 		h.feed(html)
 		for (k, v) in h.result.items():
 			print '%s: %s'%(k, v)

@@ -27,7 +27,24 @@ static struct eventloop *ev_list;
 
 #define NBIO_DELETED 0x80
 
-struct eventloop *eventloop_find(const char *name)
+static void nbio__ctor(void)
+{
+	static int done;
+	if ( done )
+		return;
+#ifdef HAVE_POLL
+	_eventloop_poll_ctor();
+#endif
+#ifdef HAVE_EPOLL
+	_eventloop_epoll_ctor();
+#endif
+#ifdef HAVE_IOCP
+	_eventloop_iocp_ctor();
+#endif
+	done = 1;
+}
+
+static struct eventloop *eventloop_lookup(const char *name)
 {
 	struct eventloop *e;
 
@@ -38,9 +55,24 @@ struct eventloop *eventloop_find(const char *name)
 	return e;
 }
 
+struct eventloop *eventloop_find(const char *plugin)
+{
+	nbio__ctor();
+
+	if ( NULL == plugin ) {
+		if ( NULL == ev_list ) {
+			fprintf(stderr, "nbio: No eventloop plugins\n");
+			return 0;
+		}
+		return ev_list;
+	}else{
+		return eventloop_lookup(plugin);
+	}
+}
+
 void eventloop_add(struct eventloop *e)
 {
-	if ( eventloop_find(e->name) ) {
+	if ( eventloop_lookup(e->name) ) {
 		fprintf(stderr, "eventloop: '%s' eventloop is "
 			"already registered\n", e->name);
 		return;
@@ -50,23 +82,19 @@ void eventloop_add(struct eventloop *e)
 	ev_list = e;
 }
 
-int nbio_init(struct iothread *t, const char *plugin)
+int nbio_init(struct iothread *t, struct eventloop *e)
 {
-	if ( NULL == plugin ) {
-		if ( NULL == ev_list ) {
-			fprintf(stderr, "nbio: No eventloop plugins\n");
-			return 0;
-		}
-		t->plugin = ev_list;
-	}else{
-		t->plugin = eventloop_find(plugin);
-	}
+	nbio__ctor();
 
+	if ( NULL == e )
+		e = eventloop_find(NULL);
+
+	t->plugin = e;
 	if ( NULL == t->plugin )
 		return 0;
 
 	for ( ; !t->plugin->init(t); t->plugin = t->plugin->next ) {
-		if ( plugin || NULL == t->plugin->next )
+		if ( e || NULL == t->plugin->next )
 			return 0;
 	}
 
@@ -217,17 +245,4 @@ void nbio_add(struct iothread *t, struct nbio *io, nbio_flags_t wait)
 	INIT_LIST_HEAD(&io->list);
 	io->mask = io->flags = 0;
 	do_set_wait(t, io, wait, NULL);
-}
-
-static void __attribute__((constructor)) _ctor(void)
-{
-#ifdef HAVE_POLL
-	_eventloop_poll_ctor();
-#endif
-#ifdef HAVE_EPOLL
-	_eventloop_epoll_ctor();
-#endif
-#ifdef HAVE_IOCP
-	_eventloop_iocp_ctor();
-#endif
 }

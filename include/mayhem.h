@@ -31,7 +31,6 @@ struct mayhem_ops {
 
 mayhem_t mayhem_connect(struct iothread *t, wmvars_t vars,
 			const struct mayhem_ops *ops, void *priv);
-int mayhem_pump(mayhem_t m);
 void mayhem_abort(mayhem_t m);
 void mayhem_close(mayhem_t m);
 

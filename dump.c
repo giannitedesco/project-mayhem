@@ -160,7 +160,7 @@ static void dumper_close(struct dumper *d)
 int main(int argc, char **argv)
 {
 	struct iothread iothread;
-	const char *plugin = NULL;
+	struct eventloop *plugin = NULL;
 	struct dumper *d;
 
 	setvbuf(stdout, (char *) NULL, _IOLBF, 0);

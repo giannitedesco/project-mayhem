@@ -44,11 +44,11 @@ struct nbio_ops {
 };
 
 /* nbio API */
+int nbio_init(struct iothread *t, struct eventloop *e);
 void nbio_add(struct iothread *, struct nbio *, nbio_flags_t);
 void nbio_del(struct iothread *, struct nbio *);
 void nbio_pump(struct iothread *, int mto);
 void nbio_fini(struct iothread *);
-int nbio_init(struct iothread *, const char *plugin);
 void nbio_inactive(struct iothread *, struct nbio *, nbio_flags_t);
 void nbio_set_wait(struct iothread *, struct nbio *, nbio_flags_t);
 nbio_flags_t nbio_get_wait(struct nbio *io);
