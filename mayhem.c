@@ -252,9 +252,10 @@ static int i_chat(mayhem_t m, invoke_t inv)
 	if ( amf_type(user) != AMF_STRING || amf_type(chat) != AMF_STRING )
 		return 0;
 
-	printf("mayhem: chat: <%s> %s\n",
-		amf_get_string(user),
-		amf_get_string(chat));
+	if ( m->ops && m->ops->NaiadAddChat )
+		(m->ops->NaiadAddChat)(m->priv,
+					amf_get_string(user),
+					amf_get_string(chat));
 	return 1;
 }
 
