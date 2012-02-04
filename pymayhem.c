@@ -88,6 +88,18 @@ static void NaiadPreGoldShow(void *priv, struct naiad_goldshow *gs)
 static void rip(void *priv, struct rtmp_pkt *pkt,
 			const uint8_t *buf, size_t sz)
 {
+	PyObject *ret, *self = priv;
+	PyObject *p;
+
+	p = pypm_rtmp_pkt_New(pkt);
+	if ( NULL == p ) {
+		return;
+	}
+
+	ret = PyObject_CallMethod(self, "stream_rip", "Os#", p, buf, sz);
+	if ( NULL == ret )
+		return;
+	Py_DECREF(ret);
 }
 
 static void play(void *priv)
