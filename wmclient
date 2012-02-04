@@ -300,7 +300,7 @@ class Connection(mayhem.mayhem):
 		self.go = True
 		self.px = poll()
 		self.win = win
-		self.playing = False
+		self.pkts = 0
 		# must be last
 		mayhem.mayhem.__init__(self, v)
 
@@ -366,10 +366,10 @@ class Connection(mayhem.mayhem):
 		buf.place_cursor(buf.get_iter_at_offset(buf.get_char_count()))
 		gtk.gdk.threads_leave()
 
-	def stream_packet(self, pkt, buf):
-		#gtk.gdk.threads_enter()
-		#self.win.vid.pipeline.push_data(buf)
-		#gtk.gdk.threads_leave()
+	def push_flv(self, buf):
+		gtk.gdk.threads_enter()
+		self.win.vid.pipeline.push_data(buf)
+		gtk.gdk.threads_leave()
 		return
 
 	def stream_play(self):

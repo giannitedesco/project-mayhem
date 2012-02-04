@@ -9,6 +9,7 @@
 #include <wmdump.h>
 #include <wmvars.h>
 #include <rtmp/amf.h>
+#include <rtmp/proto.h>
 #include <os.h>
 #include <list.h>
 #include <nbio.h>
@@ -106,30 +107,90 @@ static void NaiadAddChat(void *priv, const char *nick, const char *chat)
 		return;
 	Py_DECREF(ret);
 }
-static void rip(void *priv, struct rtmp_pkt *pkt,
-			const uint8_t *buf, size_t sz)
+
+static void push_buffer(PyObject *self, const uint8_t *buf, size_t sz)
 {
-	PyObject *ret, *self = priv;
-	PyObject *p;
+	PyObject *ret;
 
-	p = pypm_rtmp_pkt_New(pkt);
-	if ( NULL == p ) {
-		return;
-	}
-
-	ret = PyObject_CallMethod(self, "stream_packet", "Os#", p, buf, sz);
+	ret = PyObject_CallMethod(self, "push_flv", "s#", buf, sz);
 	if ( NULL == ret )
 		return;
 	Py_DECREF(ret);
 }
 
+struct flv_tag {
+	uint8_t type;
+	uint8_t len[3];
+	uint8_t ts[3];
+	uint8_t ts_high;
+	uint8_t id[3];
+}__attribute__((packed));
+
+static void rip(void *priv, struct rtmp_pkt *pkt,
+			const uint8_t *buf, size_t sz)
+{
+	PyObject *self = priv;
+	uint8_t *fbuf;
+	uint8_t prev_tag_sz[4];
+	struct flv_tag tag;
+	size_t fsz, tsz;
+
+	if ( !sz )
+		return;
+
+	switch(pkt->type) {
+	case RTMP_MSG_AUDIO:
+		if ( sz <= 2 )
+			return;
+		break;
+	case RTMP_MSG_VIDEO:
+		if ( sz <= 6 )
+			return;
+		break;
+	default:
+		break;
+	}
+
+	fsz = sizeof(tag) + sz + sizeof(prev_tag_sz);
+	fbuf = malloc(fsz);
+	if ( NULL == fbuf )
+		return;
+
+	memset(&tag, 0, sizeof(tag));
+	tag.type = pkt->type;
+	tag.len[0] = (sz >> 16) & 0xff;
+	tag.len[1] = (sz >> 8) & 0xff;
+	tag.len[2] = (sz) & 0xff;
+	tag.ts[0] = (pkt->ts >> 16) & 0xff;
+	tag.ts[1] = (pkt->ts >> 8) & 0xff;
+	tag.ts[2] = (pkt->ts) & 0xff;
+	tag.ts_high = (pkt->ts >> 24) & 0xff;
+
+	tsz = sz + sizeof(tag);
+	prev_tag_sz[0] = (tsz >> 24) & 0xff;
+	prev_tag_sz[1] = (tsz >> 16) & 0xff;
+	prev_tag_sz[2] = (tsz >> 8) & 0xff;
+	prev_tag_sz[3] = (tsz) & 0xff;
+
+	memcpy(fbuf, &tag, sizeof(tag));
+	memcpy(fbuf + sizeof(tag), buf, sz);
+	memcpy(fbuf + sizeof(tag) + sz, prev_tag_sz, sizeof(prev_tag_sz));
+	push_buffer(self, fbuf, fsz);
+
+	free(fbuf);
+}
+
 static void play(void *priv)
 {
 	PyObject *ret, *self = priv;
+	static const uint8_t hdr[] = {'F', 'L', 'V', 1, 5, 0, 0, 0, 9,
+					0, 0, 0, 0};
 	ret = PyObject_CallMethod(self, "stream_play", "");
 	if ( NULL == ret )
 		return;
 	Py_DECREF(ret);
+
+	push_buffer(self, hdr, sizeof(hdr));
 }
 
 static void stop(void *priv)
