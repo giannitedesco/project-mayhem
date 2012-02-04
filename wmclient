@@ -13,13 +13,42 @@ from select import poll, POLLIN,POLLOUT,POLLERR,POLLHUP,POLLNVAL
 from collections import deque
 
 class VidSource:
-	def read(self, sz):
+	def read(self, sz = 4096):
 		raise Exception
+	def ready(self):
+		return True
 	def __init__(self):
 		pass
 
+class VidStream(VidSource):
+	def read(self, sz = 0):
+		buf = self.bufs.popleft()
+		self.cur_sz -= len(buf)
+		return buf
+	def ready(self):
+		if not self.cur_sz or self.prebuffer:
+			return False
+		return self.cur_sz > 0
+	def push(self, buf):
+		self.bufs.append(buf)
+		self.cur_sz += len(buf)
+		if len(buf) >= self.prebuffer:
+			if self.prebuffer:
+				print 'buffered'
+			self.prebuffer = 0
+		else:
+			self.prebuffer -= len(buf)
+			print '%d Kbytes to fill'%(self.prebuffer >> 10)
+		self.out.write(buf)
+
+	def __init__(self, prebuffer = (1 << 19)):
+		self.bufs = deque()
+		self.prebuffer = prebuffer
+		self.cur_sz = 0
+		self.out = file('out.flv', 'w')
+
 class VidFile(VidSource):
-	def read(self, sz):
+	def read(self, sz = 4096):
 		return self.f.read(sz)
 	def __init__(self, fn):
 		self.f = open(fn)
@@ -48,14 +77,21 @@ class VidPipeline(gst.Pipeline):
 			pad.link(qa_pad)
 
 	def need_data(self, src, size):
-		buf = self.vid.read(size)
-		if len(buf) == 0:
-			self.set_state(gst.STATE_NULL)
-			return
-		self.appsrc.emit('push-buffer', gst.Buffer(buf))
+		print 'need-data', size
+		self.needy = True
+		while self.needy and self.vid.ready():
+			buf = self.vid.read()
+			self.appsrc.emit('push-buffer', gst.Buffer(buf))
+	def enough_data(self, src):
+		print 'enough-data'
+		self.needy = False
 
 	def push_data(self, buf):
-		self.appsrc.emit('push-buffer', gst.Buffer(buf))
+#		print 'push-data'
+		self.vid.push(buf)
+		while self.needy and self.vid.ready():
+			buf = self.vid.read()
+			self.appsrc.emit('push-buffer', gst.Buffer(buf))
 
 	def set_xwindow_id(self, xid):
 		self.vsink.set_xwindow_id(xid)
@@ -64,6 +100,7 @@ class VidPipeline(gst.Pipeline):
 		gst.Pipeline.__init__(self, name)
 
 		self.vid = vid
+		self.needy = False
 
 		self.appsrc = gst.element_factory_make('appsrc', 'file')
 
@@ -99,10 +136,12 @@ class VidPipeline(gst.Pipeline):
 
 		if self.vid is not None:
 			self.appsrc.connect('need-data', self.need_data)
+			self.appsrc.connect('enough-data', self.enough_data)
 
 class VideoArea(gtk.DrawingArea):
 	def __init__(self):
 		gtk.DrawingArea.__init__(self)
+		self.pipeline = None
 
 	def setup(self, vid = None):
 		self.pipeline = VidPipeline(vid)
@@ -150,9 +189,11 @@ class VideoArea(gtk.DrawingArea):
 			self.set_size_request(x, y)
 
 	def play(self):
-		self.pipeline.set_state(gst.STATE_PLAYING)
+		if self.pipeline is not None:
+			self.pipeline.set_state(gst.STATE_PLAYING)
 	def stop(self):
-		self.pipeline.set_state(gst.STATE_NULL)
+		if self.pipeline is not None:
+			self.pipeline.set_state(gst.STATE_NULL)
 
 class WebThread(threading.Thread):
 	def convert(self, d, url):
@@ -178,7 +219,6 @@ class WebThread(threading.Thread):
 		self.win.hdr.performer.set_text(v.pageurl)
 		self.win.hdr.topic.set_text(v.tcUrl)
 		self.win.userlist.extend(['bob', 'fred', 'jimbosucksdicks'])
-		self.win.vid.setup()
 		gtk.gdk.threads_leave()
 
 	def __init__(self, url, win):
@@ -277,6 +317,8 @@ class Bitch(gtk.VBox):
 	def __init__(self, url):
 		gtk.VBox.__init__(self)
 
+		self.url = url
+
 		self.vid = VideoArea()
 		self.hdr = Header()
 		self.chatbar = ChatBar()
@@ -291,8 +333,7 @@ class Bitch(gtk.VBox):
 		self.pack_start(self.chatbar, False, False, 0)
 
 	def start(self):
-		from sys import argv
-		wt = WebThread(argv[1], self)
+		wt = WebThread(self.url, self)
 		wt.start()
 
 class Connection(mayhem.mayhem):
@@ -301,12 +342,9 @@ class Connection(mayhem.mayhem):
 		self.px = poll()
 		self.win = win
 		self.pkts = 0
+		self.vidsrc = None
 		# must be last
 		mayhem.mayhem.__init__(self, v)
-
-	def idle(self):
-		self.nbio_pump()
-		return False
 
 	def n2p(self, flags):
 		f = [(mayhem.NBIO_READ, glib.IO_IN),
@@ -350,8 +388,9 @@ class Connection(mayhem.mayhem):
 		gtk.gdk.threads_leave()
 
 	def NaiadFreeze(self, code, u1, u2, desc):
-		print 'freeze', desc
-		print
+		gtk.gdk.threads_enter()
+		self.win.hdr.topic.set_text(desc)
+		gtk.gdk.threads_leave()
 
 	def NaiadPreGoldShow(self, gs):
 		gtk.gdk.threads_enter()
@@ -363,18 +402,23 @@ class Connection(mayhem.mayhem):
 		gtk.gdk.threads_enter()
 		buf = self.win.chatbar.chat.get_buffer()
 		buf.insert_at_cursor(s)
-		buf.place_cursor(buf.get_iter_at_offset(buf.get_char_count()))
+		iter = buf.get_iter_at_offset(buf.get_char_count())
+		buf.place_cursor(iter)
+		self.win.chatbar.chat.scroll_to_iter(iter)
 		gtk.gdk.threads_leave()
 
 	def push_flv(self, buf):
+		if self.vidsrc is None:
+			return
 		gtk.gdk.threads_enter()
 		self.win.vid.pipeline.push_data(buf)
 		gtk.gdk.threads_leave()
-		return
 
 	def stream_play(self):
 		print 'play'
+		self.vidsrc = VidStream()
 		gtk.gdk.threads_enter()
+		self.win.vid.setup(self.vidsrc)
 		self.win.vid.play()
 		gtk.gdk.threads_leave()
 
@@ -412,7 +456,7 @@ class MainWin(gtk.Window):
 		agr.connect_group(k, m, gtk.ACCEL_VISIBLE, cb)
 		self.add_accel_group(agr)
 
-	def __init__(self):
+	def __init__(self, url):
 		gtk.Window.__init__(self, gtk.WINDOW_TOPLEVEL)
 		self.in_main = False
 		self.connect('destroy', self.destroy)
@@ -422,14 +466,15 @@ class MainWin(gtk.Window):
 		self.__accel('<Control>Q', self.destroy)
 		self.__accel('<Control>W', self.destroy)
 
-		self.bitch = Bitch('http://...')
+		self.bitch = Bitch(url)
 		self.add(self.bitch)
 
 		self.show_all()
 		self.bitch.start()
 
 if __name__ == '__main__':
+	from sys import argv
 	gobject.threads_init()
 	gtk.gdk.threads_init()
-	x = MainWin()
+	x = MainWin(argv[1])
 	x.main()
