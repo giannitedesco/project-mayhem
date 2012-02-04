@@ -499,7 +499,8 @@ static void play_error(netstatus_t ns, void *priv,
 			const char *code, const char *desc)
 {
 	struct _mayhem *m = priv;
-	printf("mayhem: %s: %s\n", code, desc);
+	if ( m->ops && m->ops->stream_error)
+		(*m->ops->stream_error)(m->priv, code, desc);
 	mayhem_abort(m);
 }
 

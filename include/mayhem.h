@@ -39,6 +39,7 @@ struct mayhem_ops {
 	void (*NaiadFreeze)(void *priv, int code, void *u1,
 				int u2, const char *desc);
 
+	void (*stream_error)(void *priv, const char *code, const char *desc);
 	void (*stream_play)(void *priv);
 	void (*stream_reset)(void *priv);
 	void (*stream_stop)(void *priv);

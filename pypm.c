@@ -169,6 +169,10 @@ PyMODINIT_FUNC initmayhem(void)
 	if ( NULL == m )
 		return;
 
+	PYMAYHEM_INT_CONST(m, NBIO_READ);
+	PYMAYHEM_INT_CONST(m, NBIO_WRITE);
+	PYMAYHEM_INT_CONST(m, NBIO_ERROR);
+
 	PyModule_AddObject(m, "Error", pymayhem_err_base);
 	PyModule_AddObject(m, "mayhem", (PyObject *)&mayhem_pytype);
 	PyModule_AddObject(m, "vars", (PyObject *)&pypm_vars_pytype);

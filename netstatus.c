@@ -181,6 +181,14 @@ static int conn_success(struct _netstatus *ns, struct netstatus_event *ev)
 	return 1;
 }
 
+static int play_error(struct _netstatus *ns, struct netstatus_event *ev)
+{
+	ns->state = NETSTATUS_STATE_STOPPED;
+	if ( ns->ns_ops && ns->ns_ops->error )
+		(*ns->ns_ops->error)(ns, ns->ns_priv, ev->code, ev->desc);
+	return 1;
+}
+
 static int play_start(struct _netstatus *ns, struct netstatus_event *ev)
 {
 	ns->state = NETSTATUS_STATE_PLAYING;
@@ -214,7 +222,7 @@ static int std_result(netstatus_t ns, invoke_t inv)
 		{.code = "NetConnection.Connect.Success", .fn = conn_success },
 		{.code = "NetConnection.Connect.AppShutdown", },
 		{.code = "NetConnection.Connect.Closed",},
-		{.code = "NetConnection.Connect.Failed",},
+		{.code = "NetConnection.Connect.Failed", },
 		{.code = "NetConnection.Connect.IdleTimeout",},
 		{.code = "NetConnection.Connect.InvalidApp",},
 		{.code = "NetConnection.Connect.NetworkChange",},
@@ -229,6 +237,7 @@ static int std_result(netstatus_t ns, invoke_t inv)
 		{.code = "NetStream.Play.NoSupportedTrackFound",},
 		{.code = "NetStream.Play.Transition",},
 		{.code = "NetStream.Play.InsufficientBW",},
+		{.code = "NetStream.Play.Failed", .fn = play_error},
 	};
 	struct netstatus_event st;
 	unsigned int rc, i;

@@ -72,19 +72,43 @@ static void rip(void *priv, struct rtmp_pkt *pkt,
 
 static void play(void *priv)
 {
+	PyObject *ret, *self = priv;
+	ret = PyObject_CallMethod(self, "stream_play", "");
+	if ( NULL == ret )
+		return;
+	Py_DECREF(ret);
 }
 
 static void stop(void *priv)
 {
+	PyObject *ret, *self = priv;
+	ret = PyObject_CallMethod(self, "stream_stop", "");
+	if ( NULL == ret )
+		return;
+	Py_DECREF(ret);
+}
+
+static void error(void *priv, const char *code, const char *desc)
+{
+	PyObject *ret, *self = priv;
+	ret = PyObject_CallMethod(self, "stream_error", "ss", code, desc);
+	if ( NULL == ret )
+		return;
+	Py_DECREF(ret);
 }
 
 static void reset(void *priv)
 {
+	PyObject *ret, *self = priv;
+	ret = PyObject_CallMethod(self, "stream_reset", "");
+	if ( NULL == ret )
+		return;
+	Py_DECREF(ret);
 }
 
 static int app_init(struct iothread *t)
 {
-	return 0;
+	return 1;
 }
 
 static void app_fini(struct iothread *t)
@@ -93,14 +117,74 @@ static void app_fini(struct iothread *t)
 
 static void app_active(struct iothread *t, struct nbio *n)
 {
+	PyObject *self;
+	PyObject *ret;
+
+	self = t->priv.ptr;
+
+	if ( !n->ev_priv.poll )
+		return;
+	if ( n->fd < 0 )
+		return;
+	n->ev_priv.poll = 0;
+	ret = PyObject_CallMethod(self, "nbio_active",
+					"i", n->fd);
+	if ( NULL == ret )
+		return;
+	Py_DECREF(ret);
 }
 
 static void app_pump(struct iothread *t, int mto)
 {
+	/* nothing to do, it's all done in set_active() */
 }
 
 static void app_inactive(struct iothread *t, struct nbio *n)
 {
+	PyObject *self;
+	PyObject *ret;
+
+	self = t->priv.ptr;
+
+	if ( n->ev_priv.poll )
+		return;
+
+	n->ev_priv.poll = 1;
+	ret = PyObject_CallMethod(self, "nbio_inactive",
+					"ii", n->fd, n->mask);
+	if ( NULL == ret )
+		return;
+	Py_DECREF(ret);
+}
+
+static PyObject *pymayhem_set_active(struct pymayhem *self, PyObject *args,
+				PyObject *kwds)
+{
+	struct nbio *n;
+	int fd, ev;
+
+	if ( !PyArg_ParseTuple(args, "ii", &fd, &ev) )
+		return NULL;
+
+	list_for_each_entry(n, &self->t.inactive, list) {
+		if ( n->fd != fd )
+			continue;
+		n->flags = ev;
+		list_move_tail(&n->list, &self->t.active);
+		Py_INCREF(Py_None);
+		return Py_None;
+	}
+
+	PyErr_SetString(PyExc_ValueError, "fd not found");
+	return NULL;
+}
+
+static PyObject *pymayhem_pump(struct pymayhem *self, PyObject *args,
+				PyObject *kwds)
+{
+	nbio_pump(&self->t, -1);
+	Py_INCREF(Py_None);
+	return Py_None;
 }
 
 static struct eventloop eventloop_app = {
@@ -111,11 +195,6 @@ static struct eventloop eventloop_app = {
 	.active = app_active,
 	.pump = app_pump,
 };
-
-static void _eventloop_app_ctor(void)
-{
-	eventloop_add(&eventloop_app);
-}
 
 static int pymayhem_init(struct pymayhem *self, PyObject *args, PyObject *kwds)
 {
@@ -128,6 +207,7 @@ static int pymayhem_init(struct pymayhem *self, PyObject *args, PyObject *kwds)
 		.stream_play = play,
 		.stream_reset = reset,
 		.stream_stop = stop,
+		.stream_error = error,
 		.stream_packet = rip,
 	};
 
@@ -138,7 +218,8 @@ static int pymayhem_init(struct pymayhem *self, PyObject *args, PyObject *kwds)
 		return -1;
 	}
 
-	nbio_init(&self->t, NULL);
+	nbio_init(&self->t, &eventloop_app);
+	self->t.priv.ptr = self;
 
 	vars = (struct pypm_vars *)obj;
 	self->mayhem = mayhem_connect(&self->t, &vars->vars, &ops, self);
@@ -160,6 +241,10 @@ static void pymayhem_dealloc(struct pymayhem *self)
 }
 
 static PyMethodDef pymayhem_methods[] = {
+	{"nbio_set_active",(PyCFunction)pymayhem_set_active, METH_VARARGS,
+		"mayhem.nbio_set_active(fd, flags) - Make an fd active"},
+	{"nbio_pump",(PyCFunction)pymayhem_pump, METH_VARARGS,
+		"mayhem.nbio_pump() - Run an iteration of the event loop"},
 #if 0
 	{"abort",(PyCFunction)pymayhem_abort, METH_VARARGS,
 		"mayhem.abort() - Abort"},
