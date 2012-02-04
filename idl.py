@@ -12,6 +12,14 @@ class Scalar(Field):
 	def __init__(self, name, **kw):
 		Field.__init__(self, name, **kw)
 
+class Double(Scalar):
+	def __init__(self, name, **kw):
+		Scalar.__init__(self, name, **kw)
+	def get(self, ref):
+		return 'PyFloat_FromDouble(%s)'%ref
+	def set(self, ref, val):
+		return 'idl__set_double(%s, %s)'%(ref, val)
+
 class Long(Scalar):
 	def __init__(self, name, **kw):
 		Scalar.__init__(self, name, **kw)
@@ -73,7 +81,7 @@ class String(Pointer):
 	def get(self, ref):
 		return 'PyString_FromString((const char *)%s)'%(ref)
 	def set(self, ref, val):
-		return 'idl__set_str(%s, %s)'%(ref, val)
+		return 'idl__set_str((char **)%s, %s)'%(ref, val)
 
 class Synthetic(Scalar):
 	def __init__(self, name, **kw):
@@ -185,7 +193,7 @@ class Struct:
 		l.append('{')
 		for f in self.fields:
 			if isinstance(f, Pointer):
-				l.append('\tfree(self->%s%s);'%(self.deref,
+				l.append('\tfree((void *)self->%s%s);'%(self.deref,
 								f.name))
 		l.append('\tself->ob_type->tp_free((PyObject*)self);')
 		l.append('}')

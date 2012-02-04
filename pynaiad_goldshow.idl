@@ -1,0 +1,25 @@
+from idl import Struct, FixedBuffer, CFiles, UInt, String, Double
+
+naiad_goldshow = Struct('struct naiad_goldshow', 'naiad_goldshow', 'pypm', [
+		UInt('duration'),
+		UInt('id'),
+		UInt('maxwait'),
+		UInt('minbuyin'),
+		UInt('pledged'),
+		UInt('pledgedamt'),
+		UInt('requestedamt'),
+		String('showtopic'),
+		Double('timetostart'),
+		UInt('total'),
+	])
+
+c = CFiles('pynaiad_goldshow', [naiad_goldshow])
+c.include('pypm.h', system = False)
+c.include('os.h', system = True)
+c.include('list.h', system = True)
+c.include('nbio.h', system = True)
+c.include('rtmp/amf.h', system = True)
+c.include('rtmp/rtmp.h', system = True)
+c.include('wmvars.h', system = True)
+c.include('mayhem.h', system = True)
+c.write()

@@ -258,6 +258,41 @@ static int i_chat(mayhem_t m, invoke_t inv)
 	return 1;
 }
 
+/* NaiadPreGoldShow */
+static int i_pregold(mayhem_t m, invoke_t inv)
+{
+	struct naiad_goldshow gs;
+	amf_t obj;
+
+	if ( amf_invoke_nargs(inv) < 4 ) {
+		printf("mayhem: too few args in NaiadPreGoldShow\n");
+		return 0;
+	}
+
+	obj = amf_invoke_get(inv, 3);
+	if ( NULL == obj || amf_type(obj) != AMF_OBJECT ) {
+		printf("mayhem: type mismatch in NaiadPreGoldShow\n");
+		return 0;
+	}
+
+	memset(&gs, 0, sizeof(gs));
+	gs.duration = amf_object_get_number(obj, "duration", 0);
+	gs.id = amf_object_get_number(obj, "id", 0);
+	gs.maxwait = amf_object_get_number(obj, "maxwait", 0);
+	gs.minbuyin = amf_object_get_number(obj, "minbuyin", 0);
+	gs.pledged = amf_object_get_number(obj, "pledged", 0);
+	gs.pledgedamt = amf_object_get_number(obj, "pledgedamt", 0);
+	gs.requestedamt = amf_object_get_number(obj, "requestedamt", 0);
+	gs.showtopic = amf_object_get_string(obj, "showtopic", NULL);
+	gs.timetostart = amf_object_get_number(obj, "timetostart", 0);
+	gs.total = amf_object_get_number(obj, "total", 0);
+
+	if ( m->ops && m->ops->NaiadPreGoldShow )
+		(m->ops->NaiadPreGoldShow)(m->priv, &gs);
+
+	return 1;
+}
+
 /* NaiadPledgeGold(number, null, {.amount = number, .status = number} */
 static int i_gold(mayhem_t m, invoke_t inv)
 {
@@ -297,7 +332,7 @@ static int naiad_dispatch(mayhem_t m, invoke_t inv, const char *method)
 		{.method = "NaiadUserList", .call = i_userlist},
 		{.method = "NaiadAddChat", .call = i_chat},
 		{.method = "NaiadPledgeGold", .call = i_gold},
-		/* NaiadPreGoldShow */
+		{.method = "NaiadPreGoldShow", .call = i_pregold},
 		/* NaiadGoldShow */
 		/* NaiadSet */
 		/* NaiadQualityChanged */

@@ -21,6 +21,7 @@
 /* IDL generated code */
 #include "pyvars.h"
 #include "pyrtmp_pkt.h"
+#include "pynaiad_goldshow.h"
 
 /* Exception hierarchy */
 static PyObject *pymayhem_err_base;
@@ -35,6 +36,22 @@ void pymayhem_error(const char *str)
 static PyMethodDef methods[] = {
 	{NULL, }
 };
+
+int idl__set_double(double *ref, PyObject *val)
+{
+	if ( NULL == val || val == Py_None ) {
+		*ref = 0;
+		return 0;
+	}
+
+	if ( PyFloat_Check(val) ) {
+		*ref = PyFloat_AsDouble(val);
+		return 0;
+	}
+
+	PyErr_SetString(PyExc_TypeError, "Type mismatch");
+	return -1;
+}
 
 static int set_number(unsigned long *ref, PyObject *val)
 {
@@ -152,6 +169,8 @@ PyMODINIT_FUNC initmayhem(void)
 		return;
 	if ( PyType_Ready(&pypm_rtmp_pkt_pytype) < 0 )
 		return;
+	if ( PyType_Ready(&pypm_naiad_goldshow_pytype) < 0 )
+		return;
 
 	pymayhem_err_base = PyErr_NewException(PACKAGE ".Error",
 						PyExc_RuntimeError, NULL);
@@ -173,8 +192,14 @@ PyMODINIT_FUNC initmayhem(void)
 	PYMAYHEM_INT_CONST(m, NBIO_WRITE);
 	PYMAYHEM_INT_CONST(m, NBIO_ERROR);
 
-	PyModule_AddObject(m, "Error", pymayhem_err_base);
-	PyModule_AddObject(m, "mayhem", (PyObject *)&mayhem_pytype);
-	PyModule_AddObject(m, "vars", (PyObject *)&pypm_vars_pytype);
-	PyModule_AddObject(m, "rtmp_pkt", (PyObject *)&pypm_rtmp_pkt_pytype);
+	PyModule_AddObject(m, "Error",
+				pymayhem_err_base);
+	PyModule_AddObject(m, "mayhem",
+				(PyObject *)&mayhem_pytype);
+	PyModule_AddObject(m, "vars",
+				(PyObject *)&pypm_vars_pytype);
+	PyModule_AddObject(m, "rtmp_pkt",
+				(PyObject *)&pypm_rtmp_pkt_pytype);
+	PyModule_AddObject(m, "naiad_goldshow",
+				(PyObject *)&pypm_naiad_goldshow_pytype);
 }

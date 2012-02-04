@@ -18,6 +18,8 @@
 #include "cvars.h"
 
 #include "pyvars.h"
+#include "pyrtmp_pkt.h"
+#include "pynaiad_goldshow.h"
 
 struct pymayhem {
 	PyObject_HEAD;
@@ -60,6 +62,24 @@ static void NaiadFreeze(void *priv, int code, void *u1,
 					NULL,
 					u2,
 					desc);
+	if ( NULL == ret )
+		return;
+	Py_DECREF(ret);
+}
+
+static void NaiadPreGoldShow(void *priv, struct naiad_goldshow *gs)
+{
+	PyObject *ret, *self = priv;
+	struct pypm_naiad_goldshow *g;
+
+	g = (struct pypm_naiad_goldshow *)pypm_naiad_goldshow_New(gs);
+	if ( NULL == g ) {
+		return;
+	}
+
+	g->naiad_goldshow.showtopic = strdup(g->naiad_goldshow.showtopic);
+
+	ret = PyObject_CallMethod(self, "NaiadPreGoldShow", "O", g);
 	if ( NULL == ret )
 		return;
 	Py_DECREF(ret);
@@ -203,6 +223,7 @@ static int pymayhem_init(struct pymayhem *self, PyObject *args, PyObject *kwds)
 	static const struct mayhem_ops ops = {
 		.NaiadAuthorize = NaiadAuthorize,
 		.NaiadFreeze = NaiadFreeze,
+		.NaiadPreGoldShow = NaiadPreGoldShow,
 
 		.stream_play = play,
 		.stream_reset = reset,

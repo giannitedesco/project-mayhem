@@ -25,10 +25,21 @@ struct naiad_room {
 #define MAYHEM_GOLDSHOW_START		2
 #define MAYHEM_GOLDSHOW_CANCEL		3
 #define MAYHEM_GOLDSHOW_END		4
-
 #define MAYHEM_GS_ERROR_AUTH		1
 #define MAYHEM_GS_ERROR_LIMIT		2
 #define MAYHEM_GS_ERROR_UNAVAILABLE	3
+struct naiad_goldshow {
+	unsigned int duration;
+	unsigned int id;
+	unsigned int maxwait;
+	unsigned int minbuyin;
+	unsigned int pledged;
+	unsigned int pledgedamt;
+	unsigned int requestedamt;
+	const char *showtopic;
+	double timetostart;
+	unsigned int total;
+};
 
 struct mayhem_ops {
 	void (*NaiadAuthorize)(void *priv, int code,
@@ -38,6 +49,7 @@ struct mayhem_ops {
 				struct naiad_room *room);
 	void (*NaiadFreeze)(void *priv, int code, void *u1,
 				int u2, const char *desc);
+	void (*NaiadPreGoldShow)(void *priv, struct naiad_goldshow *gs);
 
 	void (*stream_error)(void *priv, const char *code, const char *desc);
 	void (*stream_play)(void *priv);

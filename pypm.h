@@ -7,6 +7,7 @@
 
 void pymayhem_error(const char *str);
 
+int idl__set_double(double *ref, PyObject *val);
 int idl__set_ulong(unsigned long *ref, PyObject *val);
 int idl__set_long(long *ref, PyObject *val);
 int idl__set_uint(unsigned int *ref, PyObject *val);

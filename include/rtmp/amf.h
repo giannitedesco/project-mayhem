@@ -29,6 +29,9 @@ amf_t amf_undefined(void);
 amf_t amf_object(void);
 int amf_object_set(amf_t a, const char *name, amf_t obj);
 amf_t amf_object_get(amf_t a, const char *name);
+double amf_object_get_number(amf_t a, const char *name, double def);
+const char *amf_object_get_string(amf_t a, const char *name, const char *def);
+
 
 /* These are of type AMF_STRICT_ARRAY and NOT AMF_ECMA_ARRAY */
 amf_t amf_array(size_t nmemb);

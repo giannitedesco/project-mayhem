@@ -240,6 +240,22 @@ amf_t amf_object_get(amf_t a, const char *name)
 	return a->u.obj.elem[idx].val;
 }
 
+double amf_object_get_number(amf_t a, const char *name, double def)
+{
+	amf_t item = amf_object_get(a, name);
+	if ( NULL == item || item->type != AMF_NUMBER )
+		return def;
+	return amf_get_number(item);
+}
+
+const char *amf_object_get_string(amf_t a, const char *name, const char *def)
+{
+	amf_t item = amf_object_get(a, name);
+	if ( NULL == item || item->type != AMF_STRING )
+		return def;
+	return amf_get_string(item);
+}
+
 void amf_free(amf_t a)
 {
 	if ( a ) {
