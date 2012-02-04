@@ -8,6 +8,15 @@
 
 typedef struct _mayhem *mayhem_t;
 
+#define MAYHEM_FLAGS_ADDUSER		(1<<0)
+#define MAYHEM_FLAGS_NOBASIC		(1<<1)
+#define MAYHEM_FLAGS_ANONYMOUS		(1<<2)
+#define MAYHEM_FLAGS_BASICUSER		(1<<3)
+#define MAYHEM_FLAGS_SYSMSG		(1<<4)
+#define MAYHEM_FLAGS_IGNOREBASIC	(1<<5)
+#define MAYHEM_FLAGS_PARTYCHAT		(1<<6)
+#define MAYHEM_FLAGS_GOLDSYS		(1<<7)
+#define MAYHEM_FLAGS_EXTSS		(1<<8)
 struct naiad_room {
 	unsigned int flags;
 	const char *topic;

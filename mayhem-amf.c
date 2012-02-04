@@ -48,7 +48,7 @@ err:
 	return NULL;
 }
 
-invoke_t mayhem_amf_connect(struct _wmvars *v)
+invoke_t mayhem_amf_connect(struct _wmvars *v, int premium)
 {
 	invoke_t inv;
 	amf_t obj;
@@ -63,8 +63,15 @@ invoke_t mayhem_amf_connect(struct _wmvars *v)
 		goto err;
 
 	obj = amf_object();
-	if ( !amf_object_set(obj, "app", amf_stringf("reflect/%d", v->sid)) )
-		goto err_obj;
+	if ( premium ) {
+		if ( !amf_object_set(obj, "app",
+					amf_stringf("reflect/%d", v->sid)) )
+			goto err_obj;
+	}else{
+		if ( !amf_object_set(obj, "app",
+					amf_string("naiad/live4")) )
+			goto err_obj;
+	}
 	if ( !amf_object_set(obj, "flashVer", amf_string("LNX 11,1,102,55")) )
 		goto err_obj;
 	if ( !amf_object_set(obj, "swfUrl", amf_string(SWF_URL)) )
@@ -98,25 +105,15 @@ invoke_t mayhem_amf_connect(struct _wmvars *v)
 		goto err;
 
 	obj = amf_object();
-	if ( !amf_object_set(obj, "sid", amf_stringf("%d", v->sid)) )
-		goto err_obj;
 	if ( !amf_object_set(obj, "ldmov", amf_string(v->ldmov)) )
 		goto err_obj;
 	if ( !amf_object_set(obj, "pid", amf_stringf("%d", v->pid)) )
 		goto err_obj;
 	if ( !amf_object_set(obj, "sessionType", amf_string(v->sessiontype)) )
 		goto err_obj;
-	if ( !amf_object_set(obj, "signupargs", amf_string(v->signupargs)) )
-		goto err_obj;
-	if ( !amf_object_set(obj, "g", amf_string(v->g)) )
-		goto err_obj;
-	if ( !amf_object_set(obj, "ft", amf_stringf("%d", v->ft)) )
-		goto err_obj;
 	if ( !amf_object_set(obj, "hd", amf_stringf("%d", v->hd)) )
 		goto err_obj;
 	if ( !amf_object_set(obj, "sk", amf_string(v->sk)) )
-		goto err_obj;
-	if ( !amf_object_set(obj, "nickname", amf_string(v->nickname)) )
 		goto err_obj;
 	if ( !amf_object_set(obj, "sakey", amf_string(v->sakey)) )
 		goto err_obj;
@@ -124,9 +121,25 @@ invoke_t mayhem_amf_connect(struct _wmvars *v)
 		goto err_obj;
 	if ( !amf_object_set(obj, "version", amf_number(7.0)) )
 		goto err_obj;
+
+	if ( !premium )
+		goto done;
+
+	/* only for non-premium */
+	if ( !amf_object_set(obj, "sid", amf_stringf("%d", v->sid)) )
+		goto err_obj;
+	if ( !amf_object_set(obj, "signupargs", amf_string(v->signupargs)) )
+		goto err_obj;
+	if ( !amf_object_set(obj, "g", amf_string(v->g)) )
+		goto err_obj;
 	if ( !amf_object_set(obj, "srv", amf_stringf("%d", v->srv)) )
 		goto err_obj;
+	if ( !amf_object_set(obj, "nickname", amf_string(v->nickname)) )
+		goto err_obj;
+	if ( !amf_object_set(obj, "ft", amf_stringf("%d", v->ft)) )
+		goto err_obj;
 
+done:
 	if ( !amf_invoke_append(inv, obj) )
 		goto err;
 

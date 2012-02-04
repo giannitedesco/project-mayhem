@@ -41,7 +41,8 @@ struct netstatus_event {
 	const char *level;
 	const char *code;
 	const char *desc;
-	/* details, clientid */
+	const char *clientid;
+	/* details */
 };
 
 static int rip_status(amf_t o_stat, struct netstatus_event *st)
@@ -69,6 +70,10 @@ static int rip_status(amf_t o_stat, struct netstatus_event *st)
 		st->desc = amf_get_string(o_str);
 	}
 
+	o_str = amf_object_get(o_stat, "clientid");
+	if ( o_str && amf_type(o_str) == AMF_STRING ) {
+		st->clientid = amf_get_string(o_str);
+	}
 	return 1;
 }
 

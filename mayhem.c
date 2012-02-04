@@ -57,9 +57,27 @@ static int i_auth(mayhem_t m, invoke_t inv)
 	}
 
 	o_rc = amf_invoke_get(inv, 1);
+	/* [2] null */
+	/* [3] sakey */
+	/* [4] show number like f/sth/show_%d.mp4 */
+	/* [5] unknown number */
 	o_nick = amf_invoke_get(inv, 6);
 	o_bitch = amf_invoke_get(inv, 7);
-	o_sid = amf_invoke_get(inv, 12);
+	/* [8] number */
+	/* [9] empty string */
+	/* [10] number a bit larger than show number */
+	/* [11] bool */
+	o_sid = amf_invoke_get(inv, 12); /* or mp4 path */
+	/* [13] type GUEST = 0, PREMIUM = 1, RECORDED = 2,
+	 *      FULLSCREEN = 3, EXCLUSIVE = 4, BLOCK_PREMIUM = 5,
+	 *      BLOCK_EXCLUSIVE = 6
+	 */
+	/* bullshit */
+	/* [20] prebill */
+	/* [21] maxgold */
+	/* [22] mingold */
+	/* [23] exchangerate */
+	/* [24] currencyhtml */
 	o_room = amf_invoke_get(inv, 25);
 
 	if ( amf_type(o_rc) != AMF_NUMBER ||
@@ -101,6 +119,8 @@ static int i_auth(mayhem_t m, invoke_t inv)
 				amf_get_string(o_bitch),
 				atoi(amf_get_string(o_sid)),
 				&room);
+
+	/* For a pay-show, result is expected */
 	return 1;
 }
 
@@ -279,6 +299,11 @@ static int naiad_dispatch(mayhem_t m, invoke_t inv, const char *method)
 		{.method = "NaiadPledgeGold", .call = i_gold},
 		/* NaiadPreGoldShow */
 		/* NaiadGoldShow */
+		/* NaiadSet */
+		/* NaiadQualityChanged */
+		/* NaiadPause */
+		/* NaiadPlay */
+
 	};
 	unsigned int i;
 
@@ -330,7 +355,7 @@ static int invoke_connect(struct _mayhem *m, struct _wmvars *v)
 {
 	invoke_t inv;
 	int ret = 0;
-	inv = mayhem_amf_connect(v);
+	inv = mayhem_amf_connect(v, 0);
 	if ( NULL == inv )
 		goto out;
 	ret = netstatus_connect_custom(m->ns, inv);
@@ -433,6 +458,7 @@ static void stream_created(netstatus_t ns, void *priv, unsigned int stream_id)
 	struct _mayhem *m = priv;
 
 	m->state = MAYHEM_STATE_GOT_STREAM;
+	/* for premium amf_string("mp4:..."), lets use realpath */
 	if ( !netstatus_play(m->ns, amf_stringf("%d", m->sid), stream_id) ) {
 		mayhem_abort(m);
 		return;
