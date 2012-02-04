@@ -22,6 +22,14 @@ struct naiad_room {
 	const char *topic;
 };
 
+#define MAYHEM_GOLDSHOW_START		2
+#define MAYHEM_GOLDSHOW_CANCEL		3
+#define MAYHEM_GOLDSHOW_END		4
+
+#define MAYHEM_GS_ERROR_AUTH		1
+#define MAYHEM_GS_ERROR_LIMIT		2
+#define MAYHEM_GS_ERROR_UNAVAILABLE	3
+
 struct mayhem_ops {
 	void (*NaiadAuthorize)(void *priv, int code,
 				const char *nick,
