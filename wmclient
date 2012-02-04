@@ -183,6 +183,7 @@ class WebThread(threading.Thread):
 
 	def __init__(self, url, win):
 		threading.Thread.__init__(self)
+		self.daemon = True
 		self.url = url
 		self.win = win
 
