@@ -9,7 +9,6 @@ import gobject, glib, gtk, pango
 import pygst
 #pygst.require('0.10')
 import gst
-from select import poll, POLLIN,POLLOUT,POLLERR,POLLHUP,POLLNVAL
 from collections import deque
 
 class VidSource:
@@ -216,9 +215,7 @@ class WebThread(threading.Thread):
 
 	def got_vars(self, v):
 		gtk.gdk.threads_enter()
-		self.win.hdr.performer.set_text(v.pageurl)
-		self.win.hdr.topic.set_text(v.tcUrl)
-		self.win.userlist.extend(['bob', 'fred', 'jimbosucksdicks'])
+		self.win.got_vars(v)
 		gtk.gdk.threads_leave()
 
 	def __init__(self, url, win):
@@ -242,8 +239,6 @@ class WebThread(threading.Thread):
 		h.feed(html)
 		v = self.convert(h.result, self.url)
 		self.got_vars(v)
-		self.conn = Connection(v, self.win)
-		self.conn.mainloop()
 
 class ChatBar(gtk.VBox):
 	def __init__(self):
@@ -332,6 +327,12 @@ class Bitch(gtk.VBox):
 		self.pack_start(hb, True, True, 0)
 		self.pack_start(self.chatbar, False, False, 0)
 
+	def got_vars(self, v):
+		self.hdr.performer.set_text(v.pageurl)
+		self.hdr.topic.set_text(v.tcUrl)
+		self.userlist.extend(['bob', 'fred', 'jimbosucksdicks'])
+		self.conn = Connection(v, self)
+
 	def start(self):
 		wt = WebThread(self.url, self)
 		wt.start()
@@ -339,7 +340,7 @@ class Bitch(gtk.VBox):
 class Connection(mayhem.mayhem):
 	def __init__(self, v, win):
 		self.go = True
-		self.px = poll()
+		self.px = {}
 		self.win = win
 		self.pkts = 0
 		self.vidsrc = None
@@ -365,73 +366,63 @@ class Connection(mayhem.mayhem):
 				ret |= m
 		return ret
 
+	def idle(self):
+		return self.nbio_pump()
+
 	def nbio_active(self, fd):
-		self.px.unregister(fd)
+		if self.px.has_key(fd):
+			glib.source_remove(self.px[fd])
+			del self.px[fd]
+
+	def gcb(self, fd, flags):
+		flags = self.p2n(flags)
+		self.nbio_set_active(fd, flags)
+		glib.idle_add(self.idle)
+		return False
 
 	def nbio_inactive(self, fd, flags):
-		self.px.register(fd, self.n2p(flags))
-
-	def mainloop(self):
-		while self.go:
-			x = self.px.poll()
-			for (fd, fl) in x:
-				f = self.p2n(fl)
-				self.nbio_set_active(fd, f)
-			self.nbio_pump()
+		if self.px.has_key(fd):
+			glib.source_remove(self.px[fd])
+		sid = glib.io_add_watch(fd, self.n2p(flags), self.gcb)
+		self.px[fd] = sid
 
 	def NaiadAuthorize(self, code, nick, bitch, sid, room):
-		gtk.gdk.threads_enter()
 		self.win.hdr.performer.set_text(bitch)
 		self.win.chatbar.nick.set_text(nick)
 		if room.topic is not None:
 			self.win.hdr.topic.set_text(room.topic)
-		gtk.gdk.threads_leave()
 
 	def NaiadFreeze(self, code, u1, u2, desc):
-		gtk.gdk.threads_enter()
 		self.win.hdr.topic.set_text(desc)
-		gtk.gdk.threads_leave()
 
 	def NaiadPreGoldShow(self, gs):
-		gtk.gdk.threads_enter()
 		self.win.hdr.topic.set_text('GOLD: ' + gs.showtopic)
-		gtk.gdk.threads_leave()
 
 	def NaiadAddChat(self, nick, chat):
 		s = '<%s> %s\n'%(nick, chat)
-		gtk.gdk.threads_enter()
 		buf = self.win.chatbar.chat.get_buffer()
 		buf.insert_at_cursor(s)
 		iter = buf.get_iter_at_offset(buf.get_char_count())
 		buf.place_cursor(iter)
 		self.win.chatbar.chat.scroll_to_iter(iter)
-		gtk.gdk.threads_leave()
 
 	def push_flv(self, buf):
 		if self.vidsrc is None:
 			return
-		gtk.gdk.threads_enter()
 		self.win.vid.pipeline.push_data(buf)
-		gtk.gdk.threads_leave()
 
 	def stream_play(self):
 		print 'play'
 		self.vidsrc = VidStream()
-		gtk.gdk.threads_enter()
 		self.win.vid.setup(self.vidsrc)
 		self.win.vid.play()
-		gtk.gdk.threads_leave()
 
 	def stream_reset(self):
-		gtk.gdk.threads_enter()
 		self.win.vid.stop()
-		gtk.gdk.threads_leave()
 		print 'reset'
 
 	def stream_stop(self):
-		gtk.gdk.threads_enter()
 		self.win.vid.stop()
-		gtk.gdk.threads_leave()
 		print 'stop'
 
 	def stream_error(self, code, desc):

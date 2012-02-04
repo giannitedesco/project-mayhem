@@ -27,6 +27,7 @@ struct pymayhem {
 	PyObject_HEAD;
 	struct iothread t;
 	mayhem_t mayhem;
+	int fuck;
 };
 
 static void NaiadAuthorize(void *priv, int code,
@@ -243,8 +244,11 @@ static void app_active(struct iothread *t, struct nbio *n)
 	n->ev_priv.poll = 0;
 	ret = PyObject_CallMethod(self, "nbio_active",
 					"i", n->fd);
-	if ( NULL == ret )
+	if ( NULL == ret ) {
+		struct pymayhem *this = (struct pymayhem *)self;
+		this->fuck = 1;
 		return;
+	}
 	Py_DECREF(ret);
 }
 
@@ -262,6 +266,8 @@ static void app_inactive(struct iothread *t, struct nbio *n)
 
 	if ( n->ev_priv.poll )
 		return;
+	if ( n->fd < 0 )
+		return;
 
 	n->ev_priv.poll = 1;
 	ret = PyObject_CallMethod(self, "nbio_inactive",
@@ -277,6 +283,8 @@ static PyObject *pymayhem_set_active(struct pymayhem *self, PyObject *args,
 	struct nbio *n, *tmp;
 	int fd, ev;
 
+	self->fuck = 0;
+
 	if ( !PyArg_ParseTuple(args, "ii", &fd, &ev) )
 		return NULL;
 
@@ -284,8 +292,10 @@ static PyObject *pymayhem_set_active(struct pymayhem *self, PyObject *args,
 		if ( n->fd != fd )
 			continue;
 		n->flags = ev;
-		n->ev_priv.poll = 0;
 		list_move_tail(&n->list, &self->t.active);
+		self->t.plugin->active(&self->t, n);
+		if ( self->fuck )
+			return NULL;
 		Py_INCREF(Py_None);
 		return Py_None;
 	}
@@ -297,9 +307,13 @@ static PyObject *pymayhem_set_active(struct pymayhem *self, PyObject *args,
 static PyObject *pymayhem_pump(struct pymayhem *self, PyObject *args,
 				PyObject *kwds)
 {
+	PyObject *ret;
+
 	nbio_pump(&self->t, -1);
-	Py_INCREF(Py_None);
-	return Py_None;
+
+	ret = list_empty(&self->t.active) ? Py_False : Py_True;
+	Py_INCREF(ret);
+	return ret;
 }
 
 static struct eventloop eventloop_app = {
