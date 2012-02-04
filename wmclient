@@ -1,19 +1,24 @@
 #!/usr/bin/python
 
-import pymayhem as mayhem
+import pymayhem
+import mayhem
 from urlparse import urlparse
 import httplib
 import threading
-import gobject, gtk, pango
+import gobject, glib, gtk, pango
 import pygst
 #pygst.require('0.10')
 import gst
+from time import sleep
 
 class VidSource:
 	def read(self, sz):
 		raise Exception
 	def __init__(self):
 		pass
+	def ready(self):
+		return 0
+
 
 class VidFile(VidSource):
 	def read(self, sz):
@@ -46,6 +51,10 @@ class VidPipeline(gst.Pipeline):
 			pad.link(qa_pad)
 
 	def need_data(self, src, size):
+		if not self.vid.ready():
+			#print 'not ready'
+			return
+
 		buf = self.vid.read(size)
 		if len(buf) == 0:
 			self.set_state(gst.STATE_NULL)
@@ -147,10 +156,29 @@ class VideoArea(gtk.DrawingArea):
 		self.pipeline.set_state(gst.STATE_PLAYING)
 
 class WebThread(threading.Thread):
+	def convert(self, d, url):
+		v = mayhem.vars()
+		v.sid = int(d['p_sid'])
+		v.pid = int(d['p_pid'])
+		v.hd = int(d.get('p_hd', 0))
+		v.ft = int(d['p_ft'])
+		v.srv = int(d['p_srv'])
+		v.tcUrl = d['turbo'].rsplit(';', 1)[0]
+		v.signupargs = d['p_signupargs']
+		v.sessiontype = d['sessionType']
+		v.nickname = d['p_nickname']
+		v.sakey = d['p_sakey']
+		v.g = d['p_g']
+		v.ldmov = d['p_ldmov']
+		v.sk = d['p_sk']
+		v.pageurl = url
+		return v
+
 	def __init__(self, url, vcb):
 		threading.Thread.__init__(self)
 		self.url = url
 		self.vcb = vcb
+
 	def run(self):
 		u = urlparse(self.url)
 		if u.scheme != 'http':
@@ -162,11 +190,12 @@ class WebThread(threading.Thread):
 			raise Exception, r.status, r.reason
 		html = r.read()
 
-		h = mayhem.WebParser()
+		h = pymayhem.WebParser()
 		h.feed(html)
 		gtk.gdk.threads_enter()
-		self.vcb(self.url, h.result)
+		self.vcb(self.convert(h.result, self.url))
 		gtk.gdk.threads_leave()
+		sleep(10000)
 
 class ChatBar(gtk.VBox):
 	def __init__(self):
@@ -180,6 +209,7 @@ class ChatBar(gtk.VBox):
 
 		self.chat = gtk.TextView()
 		self.chat.set_border_window_size(gtk.TEXT_WINDOW_LEFT, 8)
+		self.chat.set_editable(False)
 
 		scr = gtk.ScrolledWindow()
 		scr.set_policy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
@@ -228,19 +258,21 @@ class Header(gtk.VBox):
 		self.performer.set_text('Loading...')
 
 		self.topic = gtk.Label()
+		self.topic.set_single_line_mode(False)
+		self.topic.set_line_wrap(True)
+		self.topic.set_width_chars(80)
 
 		self.pack_start(self.performer, True, True, 0)
-		self.pack_start(self.topic, False, True, 0)
+		self.pack_start(self.topic, True, True, 0)
 
 class Bitch(gtk.VBox):
-	def got_vars(self, url, v):
-		from sys import argv
-		self.hdr.performer.set_text('JanuaryJones')
-		self.hdr.topic.set_text('Sucking, fucking, toys, anal, squirting...')
+	def got_vars(self, v):
+		self.hdr.performer.set_text(v.pageurl)
+		self.hdr.topic.set_text(v.tcUrl)
 		self.userlist.extend(['bob', 'fred', 'jimbosucksdicks'])
-		self.vid.setup(VidFile(argv[1]))
+		self.vid.setup(VidSource())
 		self.vid.play()
-		#del self.wt
+		self.conn = Connection(v, self)
 
 	def __init__(self, url):
 		gtk.VBox.__init__(self)
@@ -259,10 +291,102 @@ class Bitch(gtk.VBox):
 		self.pack_start(self.chatbar, False, False, 0)
 
 	def start(self):
-#		self.wt = WebThread('http://www.webcammayhem.com/cam/DinaSky/',
-#					self.got_vars)
-#		self.wt.start()
-		self.got_vars('hai', {})
+		from sys import argv
+		wt = WebThread(argv[1], self.got_vars)
+		wt.start()
+
+class Connection(mayhem.mayhem):
+	def __init__(self, v, win):
+		self.go = True
+		self.px = {}
+		self.win = win
+		mayhem.mayhem.__init__(self, v)
+
+	def idle(self):
+		self.nbio_pump()
+		return False
+
+	def n2p(self, flags):
+		f = [(mayhem.NBIO_READ, glib.IO_IN),
+			(mayhem.NBIO_WRITE, glib.IO_OUT)]
+		ret = glib.IO_ERR | glib.IO_HUP
+		for (m, p) in f:
+			if flags & m:
+				ret |= p
+		return ret
+	def p2n(self, flags):
+		f = [(glib.IO_IN, mayhem.NBIO_READ),
+			(glib.IO_OUT, mayhem.NBIO_WRITE),
+			(glib.IO_HUP, mayhem.NBIO_ERROR),
+			(glib.IO_ERR, mayhem.NBIO_ERROR)]
+		ret = 0
+		for (p, m) in f:
+			if flags & p:
+				ret |= m
+		return ret
+
+	def nbio_active(self, fd):
+		if self.px.has_key(fd):
+			glib.source_remove(self.px[fd])
+		return
+
+	def gcb(self, fd, condition):
+		print '%d active'%fd
+		try:
+			self.nbio_set_active(fd, self.p2n(condition))
+		except ValueError:
+			pass
+		self.nbio_pump()
+		glib.idle_add(self.idle)
+		return True
+
+	def nbio_inactive(self, fd, flags):
+		print '%d inactive (%d)'%(fd, flags)
+		if self.px.has_key(fd):
+			glib.source_remove(self.px[fd])
+		sid = glib.io_add_watch(fd, self.n2p(flags), self.gcb)
+		print sid
+		self.px[fd] = sid
+
+	def NaiadAuthorize(self, code, nick, bitch, sid, room):
+		self.win.hdr.performer.set_text(bitch)
+		self.win.chatbar.nick.set_text(nick)
+		self.win.hdr.topic.set_text(room.topic)
+
+	def NaiadFreeze(self, code, u1, u2, desc):
+		print 'freeze', desc
+		print
+
+	def NaiadPreGoldShow(self, gs):
+		self.win.topic.set_text(gs.showtopic)
+
+	def NaiadAddChat(self, nick, chat):
+		s = '<%s> %s'%(nick, chat)
+		buf = self.win.chatbar.entry.get_buffer()
+		buf.insert_at_cursor(s)
+		buf.place_cursor(buf.get_char_count())
+		print s
+
+	def stream_packet(self, pkt, buf):
+		#print 'rip'
+		return
+
+	def stream_play(self):
+		print 'play'
+		print
+
+	def stream_reset(self):
+		print 'reset'
+		print
+
+	def stream_stop(self):
+		print 'stop'
+		print
+
+	def stream_error(self, code, desc):
+		print 'error'
+		print code
+		print desc
 
 class MainWin(gtk.Window):
 	def destroy(self, *_):

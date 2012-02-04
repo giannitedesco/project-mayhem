@@ -138,6 +138,9 @@ void nbio_pump(struct iothread *t, int mto)
 			/* write first since it could free up some
 			 * resources in a  tight squeeze
 			 */
+			//printf("%d %d\n", n->flags, n->mask);
+			assert((n->flags & n->mask));
+
 			if ( (n->flags & n->mask) & NBIO_WRITE )
 				n->ops->write(t, n);
 			if ( (n->flags & n->mask) & NBIO_READ )

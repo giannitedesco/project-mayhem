@@ -20,6 +20,7 @@
 #include "pyvars.h"
 #include "pyrtmp_pkt.h"
 #include "pynaiad_goldshow.h"
+#include "pynaiad_room.h"
 
 struct pymayhem {
 	PyObject_HEAD;
@@ -33,19 +34,25 @@ static void NaiadAuthorize(void *priv, int code,
 				unsigned int sid,
 				struct naiad_room *room)
 {
-	PyObject *self = priv;
-	PyObject *ret, *obj;
+	PyObject *ret, *self = priv;
+	struct pypm_naiad_room *r;
 
-	obj = Py_None;
-	Py_INCREF(obj);
 
+	r = (struct pypm_naiad_room *)pypm_naiad_room_New(room);
+	if ( NULL == r ) {
+		return;
+	}
+
+	r->naiad_room.topic = (r->naiad_room.topic) ?
+					strdup(r->naiad_room.topic) :
+					NULL;
 	ret = PyObject_CallMethod(self, "NaiadAuthorize",
 					"issiO",
 					code,
 					nick,
 					bitch,
 					sid,
-					obj);
+					r);
 	if ( NULL == ret )
 		return;
 	Py_DECREF(ret);
@@ -77,7 +84,9 @@ static void NaiadPreGoldShow(void *priv, struct naiad_goldshow *gs)
 		return;
 	}
 
-	g->naiad_goldshow.showtopic = strdup(g->naiad_goldshow.showtopic);
+	g->naiad_goldshow.showtopic = (g->naiad_goldshow.showtopic) ?
+					strdup(g->naiad_goldshow.showtopic) :
+					NULL;
 
 	ret = PyObject_CallMethod(self, "NaiadPreGoldShow", "O", g);
 	if ( NULL == ret )
@@ -108,7 +117,7 @@ static void rip(void *priv, struct rtmp_pkt *pkt,
 		return;
 	}
 
-	ret = PyObject_CallMethod(self, "stream_rip", "Os#", p, buf, sz);
+	ret = PyObject_CallMethod(self, "stream_packet", "Os#", p, buf, sz);
 	if ( NULL == ret )
 		return;
 	Py_DECREF(ret);
@@ -204,16 +213,17 @@ static void app_inactive(struct iothread *t, struct nbio *n)
 static PyObject *pymayhem_set_active(struct pymayhem *self, PyObject *args,
 				PyObject *kwds)
 {
-	struct nbio *n;
+	struct nbio *n, *tmp;
 	int fd, ev;
 
 	if ( !PyArg_ParseTuple(args, "ii", &fd, &ev) )
 		return NULL;
 
-	list_for_each_entry(n, &self->t.inactive, list) {
+	list_for_each_entry_safe(n, tmp, &self->t.inactive, list) {
 		if ( n->fd != fd )
 			continue;
 		n->flags = ev;
+		n->ev_priv.poll = 0;
 		list_move_tail(&n->list, &self->t.active);
 		Py_INCREF(Py_None);
 		return Py_None;
@@ -267,6 +277,7 @@ static int pymayhem_init(struct pymayhem *self, PyObject *args, PyObject *kwds)
 	nbio_init(&self->t, &eventloop_app);
 	self->t.priv.ptr = self;
 
+	Py_INCREF(obj);
 	vars = (struct pypm_vars *)obj;
 	self->mayhem = mayhem_connect(&self->t, &vars->vars, &ops, self);
 	if ( NULL == self->mayhem ) {

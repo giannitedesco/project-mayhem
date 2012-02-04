@@ -1,0 +1,17 @@
+from idl import Struct, FixedBuffer, CFiles, UInt, String
+
+naiad_room = Struct('struct naiad_room', 'naiad_room', 'pypm', [
+		UInt('flags'),
+		String('topic'),
+	])
+
+c = CFiles('pynaiad_room', [naiad_room])
+c.include('pypm.h', system = False)
+c.include('os.h', system = True)
+c.include('list.h', system = True)
+c.include('nbio.h', system = True)
+c.include('rtmp/amf.h', system = True)
+c.include('rtmp/rtmp.h', system = True)
+c.include('wmvars.h', system = True)
+c.include('mayhem.h', system = True)
+c.write()

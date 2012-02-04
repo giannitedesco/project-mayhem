@@ -21,7 +21,7 @@ struct dumper {
 
 static int update_bitch(struct dumper *d, const char *bitch)
 {
-	char *b = strdup(bitch);
+	char *b = (bitch) ? strdup(bitch) : NULL;
 	if ( NULL == b )
 		return 0;
 	free(d->bitch);
@@ -31,7 +31,7 @@ static int update_bitch(struct dumper *d, const char *bitch)
 
 static int update_topic(struct naiad_room *r, const struct naiad_room *new)
 {
-	char *t = strdup(new->topic);
+	char *t = (new->topic) ? strdup(new->topic) : NULL;
 	if ( NULL == t )
 		return 0;
 	free((char *)r->topic);

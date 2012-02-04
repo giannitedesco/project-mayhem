@@ -240,6 +240,7 @@ static int i_chat(mayhem_t m, invoke_t inv)
 {
 	amf_t user, chat;
 
+	printf("GOT A CHAT\n");
 	if ( amf_invoke_nargs(inv) < 6 ) {
 		printf("mayhem: too few args in NaiadAddChat\n");
 		return 0;
@@ -300,6 +301,7 @@ static int i_gold(mayhem_t m, invoke_t inv)
 	amf_t obj, amt, status;
 	unsigned int a = 0, s = 0;
 
+	printf("GOLD\n");
 	if ( amf_invoke_nargs(inv) < 4 ) {
 		printf("mayhem: too few args in NaiadPledgeGold\n");
 		return 0;
