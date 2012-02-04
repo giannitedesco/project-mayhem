@@ -13,6 +13,7 @@
 #include <list.h>
 #include <nbio.h>
 #include <rtmp/rtmp.h>
+#include <rtmp/proto.h>
 #include <mayhem.h>
 #include <flv.h>
 
@@ -194,6 +195,9 @@ PyMODINIT_FUNC initmayhem(void)
 	PYMAYHEM_INT_CONST(m, NBIO_READ);
 	PYMAYHEM_INT_CONST(m, NBIO_WRITE);
 	PYMAYHEM_INT_CONST(m, NBIO_ERROR);
+
+	PYMAYHEM_INT_CONST(m, RTMP_MSG_AUDIO);
+	PYMAYHEM_INT_CONST(m, RTMP_MSG_VIDEO);
 
 	PyModule_AddObject(m, "Error",
 				pymayhem_err_base);
