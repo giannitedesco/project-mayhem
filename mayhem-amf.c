@@ -65,11 +65,11 @@ invoke_t mayhem_amf_connect(struct _wmvars *v, int premium)
 	obj = amf_object();
 	if ( premium ) {
 		if ( !amf_object_set(obj, "app",
-					amf_stringf("reflect/%d", v->sid)) )
+					amf_string("naiad/live4")) )
 			goto err_obj;
 	}else{
 		if ( !amf_object_set(obj, "app",
-					amf_string("naiad/live4")) )
+					amf_stringf("reflect/%d", v->sid)) )
 			goto err_obj;
 	}
 	if ( !amf_object_set(obj, "flashVer", amf_string("LNX 11,1,102,55")) )
@@ -122,7 +122,7 @@ invoke_t mayhem_amf_connect(struct _wmvars *v, int premium)
 	if ( !amf_object_set(obj, "version", amf_number(7.0)) )
 		goto err_obj;
 
-	if ( !premium )
+	if ( premium )
 		goto done;
 
 	/* only for non-premium */
