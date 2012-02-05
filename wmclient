@@ -10,6 +10,7 @@ import pygst
 #pygst.require('0.10')
 import gst
 from collections import deque
+from time import strftime
 
 class VidSource:
 	def read(self, sz = 4096):
@@ -37,14 +38,18 @@ class VidStream(VidSource):
 			self.prebuffer = 0
 		else:
 			self.prebuffer -= len(buf)
-#			print '%d Kbytes to fill'%(self.prebuffer >> 10)
-		self.out.write(buf)
+#			print '%d Kbytes to fill'%(self.prebuffer >> 10)	
+		if self.out is not None:
+			self.out.write(buf)
 
-	def __init__(self, prebuffer = (1 << 19)):
+	def __init__(self, prebuffer = (1 << 19), out = None):
 		self.bufs = deque()
 		self.prebuffer = prebuffer
 		self.cur_sz = 0
-		self.out = file('out.flv', 'w')
+		if out is not None:
+			self.out = file(out, 'w')
+		else:
+			self.out = None
 
 class VidFile(VidSource):
 	def read(self, sz = 4096):
@@ -211,6 +216,9 @@ class WebThread(threading.Thread):
 		v.ldmov = d.get('p_ldmov')
 		v.sk = d.get('p_sk')
 		v.pageurl = url
+
+		#v.sakey = 'XXXXXXXX'
+		#v.sessiontype = 'preview'
 		return v
 
 	def got_vars(self, v):
@@ -365,6 +373,7 @@ class Connection(mayhem.mayhem):
 		self.win = win
 		self.pkts = 0
 		self.vidsrc = None
+		self.bitch = None
 		# must be last
 		mayhem.mayhem.__init__(self, v)
 
@@ -412,6 +421,7 @@ class Connection(mayhem.mayhem):
 	def NaiadAuthorize(self, code, nick, bitch, sid, room):
 		self.win.hdr.performer.set_text(bitch)
 		self.win.chatbar.nick.set_text(nick)
+		self.bitch = bitch
 		if room.topic is not None:
 			self.win.hdr.topic.set_text(room.topic)
 
@@ -445,8 +455,10 @@ class Connection(mayhem.mayhem):
 		self.win.vid.pipeline.push_data(buf)
 
 	def stream_play(self):
-		print 'play'
-		self.vidsrc = VidStream()
+		b = self.bitch is not None and self.bitch or 'UNKNOWN'
+		outfn = '%s-%s.flv'%(b, strftime('%F-%H-%M-%S'))
+		print 'play: Recording to: %s'%outfn
+		self.vidsrc = VidStream(out = outfn)
 		self.win.vid.setup(self.vidsrc)
 		self.win.vid.play()
 
