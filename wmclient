@@ -37,7 +37,7 @@ class VidStream(VidSource):
 			self.prebuffer = 0
 		else:
 			self.prebuffer -= len(buf)
-			print '%d Kbytes to fill'%(self.prebuffer >> 10)
+#			print '%d Kbytes to fill'%(self.prebuffer >> 10)
 		self.out.write(buf)
 
 	def __init__(self, prebuffer = (1 << 19)):
@@ -76,13 +76,13 @@ class VidPipeline(gst.Pipeline):
 			pad.link(qa_pad)
 
 	def need_data(self, src, size):
-		print 'need-data', size
+#		print 'need-data', size
 		self.needy = True
-		while self.needy and self.vid.ready():
+		while self.vid.ready():
 			buf = self.vid.read()
 			self.appsrc.emit('push-buffer', gst.Buffer(buf))
 	def enough_data(self, src):
-		print 'enough-data'
+#		print 'enough-data'
 		self.needy = False
 
 	def push_data(self, buf):
@@ -298,7 +298,6 @@ class Header(gtk.VBox):
 		attr.insert(pango.AttrScale(pango.SCALE_XX_LARGE, 0, -1))
 
 		self.performer.set_property('attributes', attr)
-		self.performer.set_text('Loading...')
 
 		self.topic = gtk.Label()
 		self.topic.set_single_line_mode(False)
@@ -326,6 +325,9 @@ class Bitch(gtk.VBox):
 		self.pack_start(self.hdr, False, False, 0)
 		self.pack_start(hb, True, True, 0)
 		self.pack_start(self.chatbar, False, False, 0)
+
+		self.hdr.performer.set_text('Loading...')
+		self.hdr.topic.set_text(url)
 
 	def got_vars(self, v):
 		self.hdr.performer.set_text(v.pageurl)
@@ -367,6 +369,7 @@ class Connection(mayhem.mayhem):
 		return ret
 
 	def idle(self):
+#		print 'pump'
 		return self.nbio_pump()
 
 	def nbio_active(self, fd):
@@ -383,6 +386,7 @@ class Connection(mayhem.mayhem):
 	def nbio_inactive(self, fd, flags):
 		if self.px.has_key(fd):
 			glib.source_remove(self.px[fd])
+#		print 'add watch for %d'%fd
 		sid = glib.io_add_watch(fd, self.n2p(flags), self.gcb)
 		self.px[fd] = sid
 
@@ -402,9 +406,9 @@ class Connection(mayhem.mayhem):
 		s = '<%s> %s\n'%(nick, chat)
 		buf = self.win.chatbar.chat.get_buffer()
 		buf.insert_at_cursor(s)
-		iter = buf.get_iter_at_offset(buf.get_char_count())
-		buf.place_cursor(iter)
-		self.win.chatbar.chat.scroll_to_iter(iter)
+		i = buf.get_iter_at_offset(buf.get_char_count())
+		buf.place_cursor(i)
+		self.win.chatbar.chat.scroll_to_iter(i, 0.25)
 
 	def push_flv(self, buf):
 		if self.vidsrc is None:
