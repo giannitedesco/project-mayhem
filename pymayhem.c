@@ -26,6 +26,7 @@
 struct pymayhem {
 	PyObject_HEAD;
 	struct iothread t;
+	struct pypm_vars *vars;
 	mayhem_t mayhem;
 	int fuck;
 };
@@ -343,7 +344,6 @@ static struct eventloop eventloop_app = {
 static int pymayhem_init(struct pymayhem *self, PyObject *args, PyObject *kwds)
 {
 	PyObject *obj;
-	struct pypm_vars *vars;
 	static const struct mayhem_ops ops = {
 		.NaiadAuthorize = NaiadAuthorize,
 		.NaiadFreeze = NaiadFreeze,
@@ -370,8 +370,8 @@ static int pymayhem_init(struct pymayhem *self, PyObject *args, PyObject *kwds)
 	self->t.priv.ptr = self;
 
 	Py_INCREF(obj);
-	vars = (struct pypm_vars *)obj;
-	self->mayhem = mayhem_connect(&self->t, &vars->vars, &ops, self);
+	self->vars = (struct pypm_vars *)obj;
+	self->mayhem = mayhem_connect(&self->t, &self->vars->vars, &ops, self);
 	if ( NULL == self->mayhem ) {
 		pymayhem_error("mayhem_connect failed");
 		return -1;
@@ -386,6 +386,9 @@ static int pymayhem_init(struct pymayhem *self, PyObject *args, PyObject *kwds)
 
 static void pymayhem_dealloc(struct pymayhem *self)
 {
+	mayhem_close(self->mayhem);
+	Py_DECREF(self->vars);
+	nbio_fini(&self->t);
 	self->ob_type->tp_free((PyObject*)self);
 }
 
