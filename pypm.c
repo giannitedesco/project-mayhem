@@ -24,6 +24,7 @@
 #include "pyrtmp_pkt.h"
 #include "pynaiad_goldshow.h"
 #include "pynaiad_room.h"
+#include "pynaiad_user.h"
 
 /* Exception hierarchy */
 static PyObject *pymayhem_err_base;
@@ -175,6 +176,8 @@ PyMODINIT_FUNC initmayhem(void)
 		return;
 	if ( PyType_Ready(&pypm_naiad_room_pytype) < 0 )
 		return;
+	if ( PyType_Ready(&pypm_naiad_user_pytype) < 0 )
+		return;
 
 	pymayhem_err_base = PyErr_NewException(PACKAGE ".Error",
 						PyExc_RuntimeError, NULL);
@@ -211,4 +214,6 @@ PyMODINIT_FUNC initmayhem(void)
 				(PyObject *)&pypm_naiad_goldshow_pytype);
 	PyModule_AddObject(m, "naiad_room",
 				(PyObject *)&pypm_naiad_room_pytype);
+	PyModule_AddObject(m, "naiad_user",
+				(PyObject *)&pypm_naiad_user_pytype);
 }

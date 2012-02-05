@@ -282,11 +282,21 @@ class UserList(gtk.TreeView):
 		self.append_column(col)
 		self.set_size_request(120, -1)
 
-	def extend(self, arr):
-		self.store.clear()
-		for usr in arr:
-			itr = self.store.append((usr,))
-		self.expand_all()
+		self.m = {}
+
+	def append(self, u):
+		itr = self.m.get(u.id, None)
+		if itr is None:
+			itr = self.store.append((u.name, ))
+			self.m[u.id] = itr
+		else:
+			self.store.set_value(itr, 0, u.name)
+
+	def delete(self, u):
+		itr = self.m.get(u.id, None)
+		if itr is None:
+			return
+		self.store.remove(itr)
 
 class Header(gtk.VBox):
 	def __init__(self):
@@ -329,10 +339,14 @@ class Bitch(gtk.VBox):
 		self.hdr.performer.set_text('Loading...')
 		self.hdr.topic.set_text(url)
 
+	def user_add(self, u):
+		self.userlist.append(u)
+	def user_del(self, u):
+		self.userlist.delete(u)
+
 	def got_vars(self, v):
 		self.hdr.performer.set_text(v.pageurl)
 		self.hdr.topic.set_text(v.tcUrl)
-		self.userlist.extend(['bob', 'fred', 'jimbosucksdicks'])
 		try:
 			self.conn = Connection(v, self)
 		except mayhem.Error:
@@ -415,6 +429,15 @@ class Connection(mayhem.mayhem):
 		i = buf.get_iter_at_offset(buf.get_char_count())
 		buf.place_cursor(i)
 		self.win.chatbar.chat.scroll_to_iter(i, 0.25)
+
+	def NaiadUserList(self, ac, ul):
+		#print ac
+		for u in ul:
+			if u.name is None:
+				self.win.user_del(u)
+			else:
+				self.win.user_add(u)
+
 
 	def push_flv(self, buf):
 		if self.vidsrc is None:

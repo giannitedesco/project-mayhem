@@ -11,9 +11,7 @@ Config.mak
 .*.swp
 pyvars.c
 pyvars.h
-pyrtmp_pkt.c
-pyrtmp_pkt.h
-pynaiad_goldshow.c
-pynaiad_goldshow.h
-pynaiad_room.c
-pynaiad_room.h
+pyrtmp_pkt.[ch]
+pynaiad_goldshow.[ch]
+pynaiad_room.[ch]
+pynaiad_user.[ch]

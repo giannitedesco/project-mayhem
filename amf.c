@@ -243,7 +243,7 @@ amf_t amf_object_get(amf_t a, const char *name)
 double amf_object_get_number(amf_t a, const char *name, double def)
 {
 	amf_t item = amf_object_get(a, name);
-	if ( NULL == item || item->type != AMF_NUMBER )
+	if ( a->type != AMF_OBJECT || NULL == item || item->type != AMF_NUMBER )
 		return def;
 	return amf_get_number(item);
 }
@@ -251,7 +251,7 @@ double amf_object_get_number(amf_t a, const char *name, double def)
 const char *amf_object_get_string(amf_t a, const char *name, const char *def)
 {
 	amf_t item = amf_object_get(a, name);
-	if ( NULL == item || item->type != AMF_STRING )
+	if ( a->type != AMF_OBJECT || NULL == item || item->type != AMF_STRING )
 		return def;
 	return amf_get_string(item);
 }

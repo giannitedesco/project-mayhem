@@ -41,6 +41,12 @@ struct naiad_goldshow {
 	unsigned int total;
 };
 
+struct naiad_user {
+	unsigned int flags;
+	const char *id;
+	const char *name;
+};
+
 struct mayhem_ops {
 	void (*NaiadAuthorize)(void *priv, int code,
 				const char *nick,
@@ -51,6 +57,8 @@ struct mayhem_ops {
 				int u2, const char *desc);
 	void (*NaiadPreGoldShow)(void *priv, struct naiad_goldshow *gs);
 	void (*NaiadAddChat)(void *priv, const char *nick, const char *chat);
+	void (*NaiadUserList)(void *priv, unsigned int ac,
+				struct naiad_user *usr, unsigned int num_usr);
 
 	void (*stream_error)(void *priv, const char *code, const char *desc);
 	void (*stream_play)(void *priv);

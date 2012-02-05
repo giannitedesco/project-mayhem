@@ -48,7 +48,6 @@ void mayhem_abort(mayhem_t m)
 static int i_auth(mayhem_t m, invoke_t inv)
 {
 	amf_t o_rc, o_nick, o_bitch, o_sid, o_room;
-	amf_t o_topic, o_flags;
 	struct naiad_room room;
 
 	if ( amf_invoke_nargs(inv) < 26 ) {
@@ -88,28 +87,9 @@ static int i_auth(mayhem_t m, invoke_t inv)
 		printf("mayhem: type mismatch in NaiadAuthorize args\n");
 		return 0;
 	}
-	
-	o_flags = amf_object_get(o_room, "flags");
-	o_topic = amf_object_get(o_room, "roomtopic");
-	if ( NULL == o_flags ||
-			NULL == o_topic ||
-			amf_type(o_flags) != AMF_NUMBER ) {
-		printf("mayhem: Attribs not found in NaiadAuthorize room\n");
-		return 0;
-	}
 
-	room.flags = amf_get_number(o_flags);
-	switch(amf_type(o_topic)) {
-	case AMF_STRING:
-		room.topic = amf_get_string(o_topic);
-		break;
-	case AMF_NULL:
-		room.topic = NULL;
-		break;
-	default:
-		printf("mayhem: bad type for roomtopic\n");
-		return 0;
-	}
+	room.topic = amf_object_get_string(o_room, "roomtopic", NULL);
+	room.flags = amf_object_get_number(o_room, "flags", 0);
 
 	m->state = MAYHEM_STATE_AUTHORIZED;
 	if ( m->ops && m->ops->NaiadAuthorize )
@@ -148,43 +128,15 @@ static int i_freeze(mayhem_t m, invoke_t inv)
 	return 1;
 }
 
-struct user {
-	unsigned int flags;
-	const char *id;
-	const char *name;
-};
-
-static int user_parse(amf_t obj, struct user *usr)
+static int user_parse(amf_t obj, struct naiad_user *usr)
 {
-	amf_t o_flags, o_id, o_name;
-
 	if ( NULL == obj || amf_type(obj) != AMF_OBJECT )
 		return 0;
 
 	memset(usr, 0, sizeof(*usr));
-
-	o_flags = amf_object_get(obj, "flags");
-	o_id = amf_object_get(obj, "id");
-	o_name = amf_object_get(obj, "userName");
-
-	if ( NULL == o_id || NULL == o_name ) {
-		printf("mayhem: missing element of user object\n");
-		return 0;
-	}
-
-	if ( (o_flags && amf_type(o_flags) != AMF_NUMBER) ||
-		amf_type(o_id) != AMF_STRING ) {
-		printf("mayhem: type mismatch in user object\n");
-		return 0;
-	}
-
-	if ( o_flags )
-		usr->flags = amf_get_number(o_flags);
-	usr->id = amf_get_string(o_id);
-
-	/* can be null or undefined */
-	if ( amf_type(o_name) == AMF_STRING )
-		usr->name = amf_get_string(o_name);
+	usr->flags = amf_object_get_number(obj, "flags", 0);
+	usr->id = amf_object_get_string(obj, "id", NULL);
+	usr->name = amf_object_get_string(obj, "userName", NULL);
 
 	return 1;
 }
@@ -194,8 +146,8 @@ static int user_parse(amf_t obj, struct user *usr)
 */
 static int i_userlist(mayhem_t m, invoke_t inv)
 {
-	unsigned int i, nargs;
-	static int done;
+	unsigned int i, nargs, ac, nusr;
+	struct naiad_user *usr;
 	amf_t obj;
 
 	nargs = amf_invoke_nargs(inv);
@@ -204,32 +156,30 @@ static int i_userlist(mayhem_t m, invoke_t inv)
 		return 0;
 	}
 
-	if ( !done )
-		return 1;
-
-	printf("mayhem: user list\n");
-
 	obj = amf_invoke_get(inv, nargs - 1);
-	if ( obj && amf_type(obj) == AMF_OBJECT ) {
-		amf_t ac;
-		ac = amf_object_get(obj, "ac");
-		if ( ac && amf_type(ac) == AMF_NUMBER ) {
-			printf(" ac = %f\n", amf_get_number(ac));
-		}
-	}
+	ac = amf_object_get_number(obj, "ac", 0);
 
-	for(i = 0; i < nargs - 5; i++) {
-		struct user usr;
+	dprintf("mayhem: user list: %d\n", ac);
+
+	nusr = nargs - 5;
+	usr = calloc(nusr, sizeof(*usr));
+	if ( NULL == usr )
+		return 0;
+
+	for(i = 0; i < nusr; i++) {
 		amf_t obj;
 
 		obj = amf_invoke_get(inv, 3 + i);
-		if ( !user_parse(obj, &usr) )
+		if ( !user_parse(obj, &usr[i]) )
 			continue;
 
-		printf(" - %s ('%s')\n", usr.name, usr.id);
+		dprintf(" - %s ('%s', %d)\n",
+			usr[i].name, usr[i].id, usr[i].flags);
 	}
 
-	done = 1;
+	if ( m->ops && m->ops->NaiadUserList )
+		(m->ops->NaiadUserList)(m->priv, ac, usr, nusr);
+	free(usr);
 	return 1;
 }
 
@@ -297,8 +247,8 @@ static int i_pregold(mayhem_t m, invoke_t inv)
 /* NaiadPledgeGold(number, null, {.amount = number, .status = number} */
 static int i_gold(mayhem_t m, invoke_t inv)
 {
-	amf_t obj, amt, status;
-	unsigned int a = 0, s = 0;
+	unsigned int a, s;
+	amf_t obj;
 
 	if ( amf_invoke_nargs(inv) < 4 ) {
 		printf("mayhem: too few args in NaiadPledgeGold\n");
@@ -311,12 +261,8 @@ static int i_gold(mayhem_t m, invoke_t inv)
 		return 0;
 	}
 
-	amt = amf_object_get(obj, "amount");
-	status = amf_object_get(obj, "status");
-	if ( amt && amf_type(amt) == AMF_NUMBER )
-		a = amf_get_number(amt);
-	if ( status && amf_type(status) == AMF_NUMBER )
-		s = amf_get_number(status);
+	a = amf_object_get_number(obj, "amount", 0);
+	s = amf_object_get_number(obj, "status", 0);
 
 	printf("mayhem: gold pledged: %d (flags = %d)\n", a / 100, s);
 	return 1;

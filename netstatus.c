@@ -47,33 +47,13 @@ struct netstatus_event {
 
 static int rip_status(amf_t o_stat, struct netstatus_event *st)
 {
-	amf_t o_str;
-
 	memset(st, 0, sizeof(*st));
 
-	o_str = amf_object_get(o_stat, "level");
-	if ( NULL == o_str || amf_type(o_str) != AMF_STRING ) {
-		printf("netstatus: bad 'level' in _result\n");
-		return 0;
-	}
-	st->level = amf_get_string(o_str);
+	st->level = amf_object_get_string(o_stat, "level", NULL);
+	st->code = amf_object_get_string(o_stat, "code", NULL);
+	st->desc = amf_object_get_string(o_stat, "description", NULL);
+	st->clientid = amf_object_get_string(o_stat, "clientid", NULL);
 
-	o_str = amf_object_get(o_stat, "code");
-	if ( NULL == o_str || amf_type(o_str) != AMF_STRING ) {
-		printf("netstatus: bad 'code' in _result\n");
-		return 0;
-	}
-	st->code = amf_get_string(o_str);
-
-	o_str = amf_object_get(o_stat, "description");
-	if ( o_str && amf_type(o_str) == AMF_STRING ) {
-		st->desc = amf_get_string(o_str);
-	}
-
-	o_str = amf_object_get(o_stat, "clientid");
-	if ( o_str && amf_type(o_str) == AMF_STRING ) {
-		st->clientid = amf_get_string(o_str);
-	}
 	return 1;
 }
 

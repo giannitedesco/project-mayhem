@@ -22,6 +22,7 @@
 #include "pyrtmp_pkt.h"
 #include "pynaiad_goldshow.h"
 #include "pynaiad_room.h"
+#include "pynaiad_user.h"
 
 struct pymayhem {
 	PyObject_HEAD;
@@ -72,6 +73,41 @@ static void NaiadFreeze(void *priv, int code, void *u1,
 					NULL,
 					u2,
 					desc);
+	if ( NULL == ret )
+		return;
+	Py_DECREF(ret);
+}
+
+static void NaiadUserList(void *priv, unsigned int ac,
+				struct naiad_user *usr, unsigned int nusr)
+{
+	PyObject *ret, *l, *self = priv;
+	unsigned int i;
+
+	l = PyList_New(nusr);
+	if ( NULL == l )
+		return;
+
+	for(i = 0; i < nusr; i++) {
+		struct pypm_naiad_user *u;
+
+		u = (struct pypm_naiad_user *)pypm_naiad_user_New(&usr[i]);
+		if ( NULL == u ) {
+			/* FIXME: leak */
+			return;
+		}
+
+		u->naiad_user.id = (u->naiad_user.id) ?
+					strdup(u->naiad_user.id) :
+					NULL;
+		u->naiad_user.name = (u->naiad_user.name) ?
+					strdup(u->naiad_user.name) :
+					NULL;
+
+		PyList_SetItem(l, i, (PyObject *)u);
+	}
+
+	ret = PyObject_CallMethod(self, "NaiadUserList", "iO", i, l);
 	if ( NULL == ret )
 		return;
 	Py_DECREF(ret);
@@ -349,6 +385,7 @@ static int pymayhem_init(struct pymayhem *self, PyObject *args, PyObject *kwds)
 		.NaiadFreeze = NaiadFreeze,
 		.NaiadPreGoldShow = NaiadPreGoldShow,
 		.NaiadAddChat = NaiadAddChat,
+		.NaiadUserList = NaiadUserList,
 
 		.stream_play = play,
 		.stream_reset = reset,

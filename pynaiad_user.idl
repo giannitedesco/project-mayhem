@@ -1,0 +1,18 @@
+from idl import Struct, FixedBuffer, CFiles, UInt, String
+
+naiad_user = Struct('struct naiad_user', 'naiad_user', 'pypm', [
+		UInt('flags'),
+		String('name'),
+		String('id'),
+	])
+
+c = CFiles('pynaiad_user', [naiad_user])
+c.include('pypm.h', system = False)
+c.include('os.h', system = True)
+c.include('list.h', system = True)
+c.include('nbio.h', system = True)
+c.include('rtmp/amf.h', system = True)
+c.include('rtmp/rtmp.h', system = True)
+c.include('wmvars.h', system = True)
+c.include('mayhem.h', system = True)
+c.write()
