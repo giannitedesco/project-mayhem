@@ -101,8 +101,13 @@ invoke_t mayhem_amf_connect(struct _wmvars *v, int premium)
 	if ( !amf_invoke_append(inv, amf_stringf("%d", v->pid)) )
 		goto err;
 
-	if ( !amf_invoke_append(inv, amf_string(NULL) ))
-		goto err;
+	if ( premium ) {
+		if ( !amf_invoke_append(inv, amf_string(v->sakey) ))
+			goto err;
+	}else{
+		if ( !amf_invoke_append(inv, amf_string(NULL) ))
+			goto err;
+	}
 
 	obj = amf_object();
 	if ( !amf_object_set(obj, "ldmov", amf_string(v->ldmov)) )

@@ -91,6 +91,8 @@ static int i_auth(mayhem_t m, invoke_t inv)
 	room.topic = amf_object_get_string(o_room, "roomtopic", NULL);
 	room.flags = amf_object_get_number(o_room, "flags", 0);
 
+	printf("%s\n", amf_get_string(o_sid));
+
 	m->state = MAYHEM_STATE_AUTHORIZED;
 	if ( m->ops && m->ops->NaiadAuthorize )
 		(m->ops->NaiadAuthorize)(m->priv,
@@ -333,11 +335,17 @@ static int invoke(void *priv, invoke_t inv)
 	return 1;
 }
 
-static int invoke_connect(struct _mayhem *m, struct _wmvars *v)
+static int is_premium(struct _mayhem *m)
+{
+	return (m->vars->sakey && strlen(m->vars->sakey));
+}
+
+static int invoke_connect(struct _mayhem *m)
 {
 	invoke_t inv;
 	int ret = 0;
-	inv = mayhem_amf_connect(v, 0);
+
+	inv = mayhem_amf_connect(m->vars, is_premium(m));
 	if ( NULL == inv )
 		goto out;
 	ret = netstatus_connect_custom(m->ns, inv);
@@ -429,9 +437,11 @@ static void stream_connected(netstatus_t ns, void *priv)
 	struct _mayhem *m = priv;
 
 	m->state = MAYHEM_STATE_CONNECTED;
-	if ( !netstatus_createstream(m->ns, 2.0) ) {
-		mayhem_abort(m);
-		return;
+	if ( !is_premium(m) ) {
+		if ( !netstatus_createstream(m->ns, 2.0) ) {
+			mayhem_abort(m);
+			return;
+		}
 	}
 }
 
@@ -508,7 +518,7 @@ static void rtmp_connected(void *priv)
 	netstatus_stream_ops(m->ns, &ns_ops, m);
 	netstatus_connect_ops(m->ns, &nc_ops, m);
 
-	if ( !invoke_connect(m, m->vars) )
+	if ( !invoke_connect(m) )
 		goto out_free_netstatus;
 
 	return;
