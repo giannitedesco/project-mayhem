@@ -203,13 +203,13 @@ class WebThread(threading.Thread):
 		v.ft = int(d['p_ft'])
 		v.srv = int(d['p_srv'])
 		v.tcUrl = d['turbo'].rsplit(';', 1)[0]
-		v.signupargs = d['p_signupargs']
-		v.sessiontype = d['sessionType']
-		v.nickname = d['p_nickname']
-		v.sakey = d['p_sakey']
-		v.g = d['p_g']
-		v.ldmov = d['p_ldmov']
-		v.sk = d['p_sk']
+		v.signupargs = d.get('p_signupargs')
+		v.sessiontype = d.get('sessionType')
+		v.nickname = d.get('p_nickname')
+		v.sakey = d.get('p_sakey')
+		v.g = d.get('p_g')
+		v.ldmov = d.get('p_ldmov')
+		v.sk = d.get('p_sk')
 		v.pageurl = url
 		return v
 
@@ -333,7 +333,12 @@ class Bitch(gtk.VBox):
 		self.hdr.performer.set_text(v.pageurl)
 		self.hdr.topic.set_text(v.tcUrl)
 		self.userlist.extend(['bob', 'fred', 'jimbosucksdicks'])
-		self.conn = Connection(v, self)
+		try:
+			self.conn = Connection(v, self)
+		except mayhem.Error:
+			if v.tcUrl is not None and len(v.tcUrl):
+				self.hdr.performer.set_text(v.tcUrl)
+			self.hdr.topic.set_text('Connection failed')
 
 	def start(self):
 		wt = WebThread(self.url, self)
@@ -398,6 +403,7 @@ class Connection(mayhem.mayhem):
 
 	def NaiadFreeze(self, code, u1, u2, desc):
 		self.win.hdr.topic.set_text(desc)
+		self.abort()
 
 	def NaiadPreGoldShow(self, gs):
 		self.win.hdr.topic.set_text('GOLD: ' + gs.showtopic)
@@ -430,9 +436,12 @@ class Connection(mayhem.mayhem):
 		print 'stop'
 
 	def stream_error(self, code, desc):
-		print 'error'
-		print code
-		print desc
+		s = '%s: %s'%(code, desc)
+		self.win.hdr.topic.set_text(s)
+
+	def conn_error(self, code, desc):
+		s = '%s: %s'%(code, desc)
+		self.win.hdr.topic.set_text(s)
 
 class MainWin(gtk.Window):
 	def destroy(self, *_):

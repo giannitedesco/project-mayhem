@@ -28,7 +28,7 @@ struct rtmp_ops {
 	int(*stream_start)(void *priv);
 	void(*read_report_sent)(void *priv, uint32_t ts);
 	void(*connected)(void *priv);
-	void(*conn_reset)(void *priv);
+	void(*conn_reset)(void *priv, const char *reason);
 };
 
 rtmp_t rtmp_connect(struct iothread *t, const char *tcUrl,

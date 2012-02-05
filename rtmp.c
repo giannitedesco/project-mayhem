@@ -661,7 +661,7 @@ static char *urlparse(const char *url, uint16_t *port)
 
 	/* skip past scheme part of url */
 	if ( strncmp(url, RTMP_SCHEME, strlen(RTMP_SCHEME)) ) {
-		fprintf(stderr, "Bad scheme: %s\n", url);
+		//fprintf(stderr, "Bad scheme: %s\n", url);
 		return 0;
 	}
 	ptr += strlen(RTMP_SCHEME);
@@ -864,7 +864,7 @@ rtmp_t rtmp_connect(struct iothread *t, const char *tcUrl,
 	if ( NULL == name )
 		goto out_free;
 
-	printf("rtmp: Connecting to: %s:%d\n", name, port);
+	dprintf("rtmp: Connecting to: %s:%d\n", name, port);
 	ret = connecter(t, name, port, conn_cb, r);
 	//ret = connecter(t, "127.0.0.1", port, conn_cb, r);
 	free(name);
@@ -896,19 +896,20 @@ void rtmp_close(rtmp_t r)
 
 static int transition(struct _rtmp *r, unsigned int state)
 {
+	const char *str;
 	int ret;
 
 	switch(state) {
 	case STATE_ABORT:
 	case STATE_CONN_RESET:
 		if ( state == STATE_ABORT ) {
-			printf("rtmp: aborted\n");
+			str = "aborted";
 		}else{
-			printf("rtmp: connection reset by peer\n");
+			str = "connection reset by peer";
 		}
 		r->state = state;
 		if ( r->ev_ops )
-			(*r->ev_ops->conn_reset)(r->ev_priv);
+			(*r->ev_ops->conn_reset)(r->ev_priv, str);
 		r->conn_reset = 1;
 		nbio_del(r->t, &r->io);
 		return 0;

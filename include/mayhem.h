@@ -58,6 +58,8 @@ struct mayhem_ops {
 	void (*stream_stop)(void *priv);
 	void (*stream_packet)(void *priv, struct rtmp_pkt *pkt,
 				const uint8_t *buf, size_t sz);
+
+	void (*connect_error)(void *priv, const char *code, const char *desc);
 };
 
 mayhem_t mayhem_connect(struct iothread *t, wmvars_t vars,

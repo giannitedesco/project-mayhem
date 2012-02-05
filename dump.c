@@ -40,6 +40,19 @@ static int update_topic(struct naiad_room *r, const struct naiad_room *new)
 	return 1;
 }
 
+static void NaiadPreGoldShow(void *priv, struct naiad_goldshow *gs)
+{
+	printf("GOLD SHOW:\n");
+	printf(" topic = %s\n", gs->showtopic);
+	printf(" buyin = %d\n", gs->minbuyin);
+	printf(" requested = %d\n", gs->requestedamt);
+}
+
+static void NaiadAddChat(void *priv, const char *nick, const char *chat)
+{
+	printf("<%s> %s\n", nick, chat);
+}
+
 static void NaiadAuthorize(void *priv, int code,
 				const char *nick,
 				const char *bitch,
@@ -114,6 +127,8 @@ static struct dumper *dumper_new(struct iothread *t, const char *varfile)
 	static const struct mayhem_ops ops = {
 		.NaiadAuthorize = NaiadAuthorize,
 		.NaiadFreeze = NaiadFreeze,
+		.NaiadAddChat = NaiadAddChat,
+		.NaiadPreGoldShow = NaiadPreGoldShow,
 
 		.stream_play = play,
 		.stream_reset = reset,

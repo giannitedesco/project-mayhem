@@ -31,7 +31,7 @@ static PyObject *pymayhem_err_base;
 /* Generic functions */
 void pymayhem_error(const char *str)
 {
-	PyErr_SetString(PyExc_SystemError, str);
+	PyErr_SetString(pymayhem_err_base, str);
 }
 
 /* methods of base class */

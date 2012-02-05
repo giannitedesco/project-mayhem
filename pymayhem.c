@@ -212,6 +212,15 @@ static void error(void *priv, const char *code, const char *desc)
 	Py_DECREF(ret);
 }
 
+static void conn_error(void *priv, const char *code, const char *desc)
+{
+	PyObject *ret, *self = priv;
+	ret = PyObject_CallMethod(self, "conn_error", "ss", code, desc);
+	if ( NULL == ret )
+		return;
+	Py_DECREF(ret);
+}
+
 static void reset(void *priv)
 {
 	PyObject *ret, *self = priv;
@@ -304,8 +313,7 @@ static PyObject *pymayhem_set_active(struct pymayhem *self, PyObject *args,
 	return NULL;
 }
 
-static PyObject *pymayhem_pump(struct pymayhem *self, PyObject *args,
-				PyObject *kwds)
+static PyObject *pymayhem_pump(struct pymayhem *self)
 {
 	PyObject *ret;
 
@@ -314,6 +322,13 @@ static PyObject *pymayhem_pump(struct pymayhem *self, PyObject *args,
 	ret = list_empty(&self->t.active) ? Py_False : Py_True;
 	Py_INCREF(ret);
 	return ret;
+}
+
+static PyObject *pymayhem_abort(struct pymayhem *self)
+{
+	mayhem_abort(self->mayhem);
+	Py_INCREF(Py_None);
+	return Py_None;
 }
 
 static struct eventloop eventloop_app = {
@@ -340,6 +355,8 @@ static int pymayhem_init(struct pymayhem *self, PyObject *args, PyObject *kwds)
 		.stream_stop = stop,
 		.stream_error = error,
 		.stream_packet = rip,
+
+		.connect_error = conn_error,
 	};
 
 	if ( !PyArg_ParseTuple(args, "O", &obj) )
@@ -375,18 +392,16 @@ static void pymayhem_dealloc(struct pymayhem *self)
 static PyMethodDef pymayhem_methods[] = {
 	{"nbio_set_active",(PyCFunction)pymayhem_set_active, METH_VARARGS,
 		"mayhem.nbio_set_active(fd, flags) - Make an fd active"},
-	{"nbio_pump",(PyCFunction)pymayhem_pump, METH_VARARGS,
+	{"nbio_pump",(PyCFunction)pymayhem_pump, METH_NOARGS,
 		"mayhem.nbio_pump() - Run an iteration of the event loop"},
-#if 0
-	{"abort",(PyCFunction)pymayhem_abort, METH_VARARGS,
+	{"abort",(PyCFunction)pymayhem_abort, METH_NOARGS,
 		"mayhem.abort() - Abort"},
-#endif
 	{NULL, }
 };
 
 static PyGetSetDef pymayhem_attribs[] = {
 #if 0
-	{"machine", (getter)pymayhem_machine_get, NULL, "Machine"},
+	{"aborted", (getter)pymayhem_aborted_get, NULL, "Is aborted?"},
 #endif
 	{NULL, }
 };

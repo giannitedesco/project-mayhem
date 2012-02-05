@@ -181,6 +181,14 @@ static int conn_success(struct _netstatus *ns, struct netstatus_event *ev)
 	return 1;
 }
 
+static int conn_err(struct _netstatus *ns, struct netstatus_event *ev)
+{
+	ns->state = NETSTATUS_STATE_CONNECTED;
+	if ( ns->nc_ops && ns->nc_ops->error )
+		(*ns->nc_ops->error)(ns, ns->nc_priv, ev->code, ev->desc);
+	return 1;
+}
+
 static int play_error(struct _netstatus *ns, struct netstatus_event *ev)
 {
 	ns->state = NETSTATUS_STATE_STOPPED;
@@ -220,13 +228,13 @@ static int std_result(netstatus_t ns, invoke_t inv)
 		int (*fn)(struct _netstatus *ns, struct netstatus_event *ev);
 	}disp[] = {
 		{.code = "NetConnection.Connect.Success", .fn = conn_success },
-		{.code = "NetConnection.Connect.AppShutdown", },
-		{.code = "NetConnection.Connect.Closed",},
-		{.code = "NetConnection.Connect.Failed", },
+		{.code = "NetConnection.Connect.AppShutdown", .fn = conn_err },
+		{.code = "NetConnection.Connect.Closed", .fn = conn_err },
+		{.code = "NetConnection.Connect.Failed", .fn = conn_err  },
 		{.code = "NetConnection.Connect.IdleTimeout",},
-		{.code = "NetConnection.Connect.InvalidApp",},
+		{.code = "NetConnection.Connect.InvalidApp", .fn = conn_err },
 		{.code = "NetConnection.Connect.NetworkChange",},
-		{.code = "NetConnection.Connect.Rejected",},
+		{.code = "NetConnection.Connect.Rejected", .fn = conn_err },
 		{.code = "NetStream.Play.Start", .fn = play_start },
 		{.code = "NetStream.Play.Reset", .fn = play_reset},
 		{.code = "NetStream.Play.Stop", .fn = play_stop },
@@ -302,7 +310,7 @@ static int create_result(netstatus_t ns, invoke_t inv)
 	}
 
 	stream_id = amf_get_number(o_id);
-	printf("netstatus: Stream created (%f) with id: %d\n",
+	dprintf("netstatus: Stream created (%f) with id: %d\n",
 		amf_get_number(o_rc), stream_id);
 	ns->state = NETSTATUS_STATE_CREATED;
 	if ( ns->nc_ops && ns->nc_ops->stream_created)

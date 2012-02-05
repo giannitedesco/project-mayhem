@@ -98,7 +98,6 @@ int nbio_init(struct iothread *t, struct eventloop *e)
 			return 0;
 	}
 
-	printf("nbio: using %s eventloop\n", t->plugin->name);
 	INIT_LIST_HEAD(&t->active);
 	INIT_LIST_HEAD(&t->inactive);
 	INIT_LIST_HEAD(&t->deleted);

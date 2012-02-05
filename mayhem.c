@@ -505,7 +505,8 @@ static void connect_error(netstatus_t ns, void *priv,
 			const char *code, const char *desc)
 {
 	struct _mayhem *m = priv;
-	printf("mayhem: %s: %s\n", code, desc);
+	if ( m->ops && m->ops->connect_error )
+		(*m->ops->connect_error)(m->priv, code, desc);
 	mayhem_abort(m);
 }
 
@@ -571,9 +572,11 @@ out_free_rtmp:
 	rtmp_close(m->rtmp);
 }
 
-static void rtmp_died(void *priv)
+static void rtmp_died(void *priv, const char *reason)
 {
 	struct _mayhem *m = priv;
+	if ( m->ops && m->ops->connect_error )
+		(*m->ops->connect_error)(m->priv, "rtmp", reason);
 	mayhem_abort(m);
 }
 
