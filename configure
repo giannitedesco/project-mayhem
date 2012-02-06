@@ -36,6 +36,7 @@ if test \! $? -eq 0; then
 	echo "HAVE_PYTHON := no" >> ${config}
 else
 	py_ldflags=`python-config --libs`
+	echo "Building with python"
 	echo "HAVE_PYTHON := yes" >> ${config}
 	echo "PYTHON_CFLAGS := ${py_cflags}" >> ${config}
 	echo "PYTHON_LDFLAGS := ${py_ldflags}" >> ${config}

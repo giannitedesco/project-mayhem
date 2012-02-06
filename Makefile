@@ -137,7 +137,7 @@ endif
 		-c -o $(patsubst .%.d, %.o, $@) $<
 
 # generate C files from IDL's
-%.c %.h: %.idl
+%.c %.h: %.idl Makefile $(CONFIG_MAK) idl.py
 	@python $<
 
 $(DUMP_BIN): $(DUMP_OBJ)
