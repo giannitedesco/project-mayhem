@@ -154,6 +154,7 @@ $(PYPM_LIB): $(PYPM_OBJ)
 
 clean:
 	$(RM) -f $(ALL_TARGETS) $(ALL_OBJ) $(ALL_DEP) $(ALL_GEN)
+	$(RM) -f *.pyc pymayhem/*.pyc
 
 # clean everything and delete config too
 mrproper: clean
