@@ -14,6 +14,15 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <time.h>
+#include <signal.h>
+
+/* For inferior unixen. We don't want to SIG_IGN this because this
+ * code is also compiled in to python module and we don' want to mess
+ * with process signal state there...
+*/
+#ifndef MSG_NOSIGNAL
+#define MSG_NOSIGNAL 0
+#endif
 
 void os_reseed_rand(void)
 {
@@ -107,4 +116,27 @@ int sock_blocking(os_sock_t s, int b)
 		return 0;
 
 	return 1;
+}
+
+#ifndef __linux__
+static int sig_pipeignore(void)
+{
+	if ( signal(SIGPIPE, SIG_IGN) == SIG_ERR )
+		return 0;
+
+	return 1;
+}
+#endif
+
+int sock_init(int globalstate)
+{
+#ifndef __linux__
+	if ( globalstate && !sig_pipeignore() )
+		return 0;
+#endif
+	return 1;
+}
+
+void sock_fini(void)
+{
 }

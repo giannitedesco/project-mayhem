@@ -20,6 +20,13 @@ void sock_close(os_sock_t sock);
 int sock_blocking(os_sock_t s, int b);
 const char *sock_err(void);
 
+/* if globalstate is 0 then don't miss with eg. signal handlers.
+ * should be called by python binding to let python process do what
+ * is required.
+*/
+int sock_init(int globalstate);
+void sock_fini(void);
+
 void os_reseed_rand(void);
 
 #endif /* _WMDUMP_OS_H */

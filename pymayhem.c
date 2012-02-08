@@ -403,6 +403,10 @@ static int pymayhem_init(struct pymayhem *self, PyObject *args, PyObject *kwds)
 		return -1;
 	}
 
+	if ( !sock_init(0) ) {
+		PyErr_SetString(PyExc_OSError, "sock_init() failed");
+		return -1;
+	}
 	nbio_init(&self->t, &eventloop_app);
 	self->t.priv.ptr = self;
 
@@ -426,6 +430,7 @@ static void pymayhem_dealloc(struct pymayhem *self)
 	mayhem_close(self->mayhem);
 	Py_DECREF(self->vars);
 	nbio_fini(&self->t);
+	sock_fini();
 	self->ob_type->tp_free((PyObject*)self);
 }
 

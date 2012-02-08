@@ -186,6 +186,9 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 
+	if ( !sock_init(1) )
+		return EXIT_FAILURE;
+
 	if ( !nbio_init(&iothread, plugin) )
 		return EXIT_FAILURE;
 
@@ -201,6 +204,7 @@ int main(int argc, char **argv)
 	}while( !list_empty(&iothread.active) );
 
 	dumper_close(d);
+	sock_fini();
 
 	printf("success\n");
 	return EXIT_SUCCESS;
