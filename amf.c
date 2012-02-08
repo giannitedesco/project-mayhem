@@ -5,7 +5,14 @@
 #include <wmdump.h>
 #include <os.h>
 #include <rtmp/amf.h>
+
+#if defined(__APPLE__) && defined(__MACH__)
+#include <libkern/OSByteOrder.h>
+#define htobe64(x) OSSwapHostToBigInt64(x)
+#define be64toh(x) OSSwapBigToHostInt64(x)
+#else
 #include <endian.h>
+#endif
 
 #include "amfbuf.h"
 

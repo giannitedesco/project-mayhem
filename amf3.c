@@ -5,7 +5,6 @@
 #include <wmdump.h>
 #include <os.h>
 #include <rtmp/amf.h>
-#include <endian.h>
 
 #include "amfbuf.h"
 
