@@ -67,7 +67,7 @@ static int rtmp_send_raw(struct _rtmp *r, const uint8_t *buf, size_t len)
 	for(end = buf + len; buf < end; buf++) {
 		ret = sock_send(r->io.fd, buf, end - buf);
 		if ( ret < 0 ) {
-			if ( errno == EAGAIN ) {
+			if ( errno == EAGAIN || errno == ENOTCONN ) {
 				dprintf("rtmp: Sleep on write\n");
 				nbio_inactive(r->t, &r->io, NBIO_WRITE);
 				return 0;
