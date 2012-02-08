@@ -62,9 +62,16 @@ class VidPipeline(gst.Pipeline):
 		if codec == 'video/x-vp6-flash':
 			self.vdec = gst.element_factory_make('ffdec_vp6f',
 								'vdec')
-		else:
+		elif codec == 'video/x-h264':
+			print codec
 			self.vdec = gst.element_factory_make('ffdec_h264',
 								'vdec')
+		elif codec == 'video/x-flash-video':
+			print 'uh...'
+			Assert(False)
+		else:
+			print codec
+			Assert(False)
 		self.add(self.vdec)
 		self.vdec.sync_state_with_parent()
 
