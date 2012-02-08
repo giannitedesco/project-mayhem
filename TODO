@@ -1,14 +1,14 @@
 Windows port:
  - just requires os-win32.c implementing winsock stuff
- - we'll need sock_init()/sock_fini() API with refcounts (and use them) for
-   initialising/cleaning up winsock subsystem
+
+OSX port:
+ - Cocoa/QTKit gui, best approach?
 
 Timestamp generation and bandwidth management:
  - Use real timestamps in rtmp code, where necessary
 
 Support all message types:
  - Handle gold show status changes
- - Proper userlist management
  - Decode HTML entities, smilies in chat
 
 Support legit account details on paid show
