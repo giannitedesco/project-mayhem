@@ -207,7 +207,7 @@ struct _amf *amf3_parse(const uint8_t *buf, size_t sz, size_t *taken)
 
 	dynamic = !!(ref & 1);
 	ref >>= 1;
-	
+
 	num = ref;
 
 	len = amf3_string(ptr, end - ptr, &str, &slen);

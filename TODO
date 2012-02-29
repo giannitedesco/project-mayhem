@@ -7,13 +7,13 @@ OSX port:
 Timestamp generation and bandwidth management:
  - Use real timestamps in rtmp code, where necessary
 
-Support all message types:
- - Handle gold show status changes
- - Decode HTML entities, smilies in chat
-
 Support legit account details on paid show
  - Need to scrape new vars, possibly handle logins/cookies
  - Support send chat, pledge gold, go pvt
+
+Support all message types:
+ - Handle gold show status changes
+ - Decode HTML entities, smilies in chat
 
 AMF parsing:
  - Sometimes we get shit like CR or NUL in strings (eg. roomtopic)
