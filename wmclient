@@ -247,7 +247,7 @@ class WebThread(threading.Thread):
 		conn.request('GET', u.path)
 		r = conn.getresponse()
 		if r.status != 200:
-			raise Exception, r.status, r.reason
+			raise Exception, (r.status, r.reason)
 		html = r.read()
 
 		h = pymayhem.WebParser()
@@ -343,8 +343,12 @@ class Bitch(gtk.VBox):
 		self.chatbar = ChatBar()
 		self.userlist = UserList()
 
+		scr = gtk.ScrolledWindow()
+		scr.set_policy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
+		scr.add(self.userlist)
+
 		hb = gtk.HBox()
-		hb.pack_start(self.userlist, False, True, 0)
+		hb.pack_start(scr, False, True, 0)
 		hb.pack_start(self.vid, True, True, 0)
 
 		self.pack_start(self.hdr, False, False, 0)

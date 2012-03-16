@@ -99,7 +99,10 @@ PYPM_OBJ := $(OS_OBJ) \
 		pymayhem.o
 
 ALL_BIN := $(DUMP_BIN) $(AMFPARSE_BIN)
-ALL_LIB := $(PYPM_LIB)
+ALL_LIB := 
+ifeq ($(HAVE_PYTHON), yes)
+ALL_LIB += $(PYPM_LIB)
+endif
 ALL_OBJ := $(DUMP_OBJ) $(AMFPARSE_OBJ) $(PYPM_OBJ)
 ALL_DEP := $(patsubst %.o, .%.d, $(ALL_OBJ))
 ALL_TARGETS := $(ALL_BIN) $(ALL_LIB)
