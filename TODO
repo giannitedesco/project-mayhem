@@ -1,7 +1,5 @@
-Support legit account details on paid show
- - Support send chat, pledge gold, go pvt
-
 Support all message types:
+ - Support send chat, pledge gold, go pvt
  - Handle gold show status changes
  - Decode HTML entities, smilies in chat
 

@@ -388,6 +388,7 @@ static int r_ctl(struct _rtmp *r, struct rtmp_pkt *pkt,
 		echo = decode_int32(buf);
 		return send_ctl(r, RTMP_CTL_PONG, echo, 0xfe227);
 	case RTMP_CTL_PONG:
+		break;
 	default:
 		printf("rtmp: CTL of unknown type %d (0x%x)\n", type, type);
 		hex_dump(buf, sz, 16);

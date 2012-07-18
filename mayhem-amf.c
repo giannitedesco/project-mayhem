@@ -14,7 +14,8 @@
 #include "cvars.h"
 #include "mayhem-amf.h"
 
-#define SWF_URL "http://www.naiadsystems.com/flash/generic/20111122/avchat.swf"
+//#define SWF_URL "http://www.naiadsystems.com/flash/generic/20111122/avchat.swf"
+#define SWF_URL "http://www.naiadsystems.com/flash/generic/20120712-02a02f1/avchat.swf"
 #define APP_VERS 7.0
 
 invoke_t mayhem_amf_start(void)
@@ -85,7 +86,7 @@ invoke_t mayhem_amf_connect(struct _wmvars *v, int premium)
 					amf_stringf("reflect/%d", v->sid)) )
 			goto err_obj;
 	}
-	if ( !amf_object_set(obj, "flashVer", amf_string("LNX 11,1,102,55")) )
+	if ( !amf_object_set(obj, "flashVer", amf_string("LNX 11,2,202,236")) )
 		goto err_obj;
 	if ( !amf_object_set(obj, "swfUrl", amf_string(SWF_URL)) )
 		goto err_obj;

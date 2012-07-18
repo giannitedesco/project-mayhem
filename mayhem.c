@@ -51,6 +51,30 @@ void mayhem_abort(mayhem_t m)
 	m->rtmp = NULL;
 }
 
+static int auth_result(mayhem_t m, float code)
+{
+	invoke_t inv;
+	int ret = 0;
+
+	inv = amf_invoke_new(4);
+	if ( NULL == inv ) {
+		return 0;
+	}
+
+	if ( !amf_invoke_set(inv, 0, amf_string("_result")) )
+		goto out;
+	if ( !amf_invoke_set(inv, 1, amf_number(code)) )
+		goto out;
+	if ( !amf_invoke_set(inv, 2, amf_null()) )
+		goto out;
+	if ( !amf_invoke_set(inv, 3, amf_null()) )
+		goto out;
+
+	ret = rtmp_flex_invoke(m->rtmp, 3, 0, inv);
+out:
+	amf_invoke_free(inv);
+	return ret;
+}
 static int i_auth(mayhem_t m, invoke_t inv)
 {
 	amf_t o_rc, o_nick, o_bitch, o_sid, o_room;
@@ -111,8 +135,10 @@ static int i_auth(mayhem_t m, invoke_t inv)
 				atoi(amf_get_string(o_sid)),
 				&room);
 
-	/* TODO: For a pay-show, result is expected */
+	/* For a pay-show, result is expected */
 	if ( is_premium(m) ) {
+		if ( !auth_result(m, amf_get_number(o_rc)) )
+			mayhem_abort(m);
 	}
 
 	return 1;
