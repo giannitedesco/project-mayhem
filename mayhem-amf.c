@@ -5,8 +5,11 @@
 #include <wmdump.h>
 #include <wmvars.h>
 #include <os.h>
+#include <list.h>
+#include <nbio.h>
 
 #include <rtmp/amf.h>
+#include <rtmp/rtmp.h>
 
 #include "cvars.h"
 #include "mayhem-amf.h"
@@ -64,8 +67,18 @@ invoke_t mayhem_amf_connect(struct _wmvars *v, int premium)
 
 	obj = amf_object();
 	if ( premium ) {
-		if ( !amf_object_set(obj, "app",
-					amf_string("naiad/live4")) )
+		char *path = NULL;
+		int ret;
+		free(rtmp_urlparse(v->tcUrl, NULL, &path));
+		if ( path ) {
+			printf(" app = %s\n", path);
+			ret = amf_object_set(obj, "app",amf_string(path));
+			free(path);
+		}else{
+			ret = amf_object_set(obj, "app",
+						amf_string("naiad/live"));
+		}
+		if ( !ret )
 			goto err_obj;
 	}else{
 		if ( !amf_object_set(obj, "app",

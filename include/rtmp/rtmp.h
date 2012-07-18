@@ -31,6 +31,8 @@ struct rtmp_ops {
 	void(*conn_reset)(void *priv, const char *reason);
 };
 
+char *rtmp_urlparse(const char *url, uint16_t *port, char **path);
+
 rtmp_t rtmp_connect(struct iothread *t, const char *tcUrl,
 			const struct rtmp_ops *ops, void *priv);
 int rtmp_invoke(rtmp_t r, int chan, uint32_t dest, invoke_t inv);

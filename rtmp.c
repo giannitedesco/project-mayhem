@@ -652,48 +652,6 @@ int rtmp_invoke(rtmp_t r, int chan, uint32_t dest, invoke_t inv)
 	return do_invoke(r, chan, dest, inv, RTMP_MSG_INVOKE);
 }
 
-static char *urlparse(const char *url, uint16_t *port)
-{
-	const char *ptr = url, *tmp;
-	char *buf, *prt;
-	uint16_t pnum;
-	int hsz;
-
-	/* skip past scheme part of url */
-	if ( strncmp(url, RTMP_SCHEME, strlen(RTMP_SCHEME)) ) {
-		//fprintf(stderr, "Bad scheme: %s\n", url);
-		return 0;
-	}
-	ptr += strlen(RTMP_SCHEME);
-
-	tmp = strchr(ptr, '/');
-	if ( NULL == tmp )
-		tmp = ptr + strlen(ptr);
-
-	hsz = tmp - ptr;
-	buf = malloc(hsz + 1);
-	if ( NULL == buf )
-		return 0;
-
-	snprintf(buf, hsz + 1, "%.*s", hsz, ptr);
-
-	prt = strchr(buf, ':');
-	if ( prt ) {
-		*prt = '\0';
-		pnum = atoi(prt + 1);
-	}else{
-		pnum = RTMP_DEFAULT_PORT;
-	}
-
-	if ( !pnum || pnum == 0xffff ) {
-		/* assume atoi went wrong */
-		pnum = RTMP_DEFAULT_PORT;
-	}
-
-	*port = pnum;
-	return buf;
-}
-
 static ssize_t rtmp_drain_buf(struct _rtmp *r)
 {
 	const uint8_t *buf = r->r_buf;
@@ -844,6 +802,54 @@ static void conn_cb(struct iothread *t, os_sock_t s, void *priv)
 	transition(r, STATE_HANDSHAKE_1);
 }
 
+char *rtmp_urlparse(const char *url, uint16_t *port, char **path)
+{
+	const char *ptr = url, *tmp;
+	char *buf, *prt;
+	uint16_t pnum;
+	int hsz;
+
+	/* skip past scheme part of url */
+	if ( strncmp(url, RTMP_SCHEME, strlen(RTMP_SCHEME)) ) {
+		//fprintf(stderr, "Bad scheme: %s\n", url);
+		return 0;
+	}
+	ptr += strlen(RTMP_SCHEME);
+
+	tmp = strchr(ptr, '/');
+	if ( NULL == tmp )
+		tmp = ptr + strlen(ptr);
+
+	hsz = tmp - ptr;
+	buf = malloc(hsz + 1);
+	if ( NULL == buf )
+		return 0;
+
+	snprintf(buf, hsz + 1, "%.*s", hsz, ptr);
+
+	prt = strchr(buf, ':');
+	if ( prt ) {
+		*prt = '\0';
+		pnum = atoi(prt + 1);
+	}else{
+		pnum = RTMP_DEFAULT_PORT;
+	}
+
+	if ( !pnum || pnum == 0xffff ) {
+		/* assume atoi went wrong */
+		pnum = RTMP_DEFAULT_PORT;
+	}
+
+	if ( port )
+		*port = pnum;
+
+	if ( path && *tmp != '\0' && strlen(tmp + 1) ) {
+		*path = strdup(tmp + 1);
+	}
+
+	return buf;
+}
+
 rtmp_t rtmp_connect(struct iothread *t, const char *tcUrl,
 			const struct rtmp_ops *ops, void *priv)
 {
@@ -860,7 +866,7 @@ rtmp_t rtmp_connect(struct iothread *t, const char *tcUrl,
 	r->io.fd = BAD_SOCKET;
 	rtmp_set_handlers(r, ops, priv);
 
-	name = urlparse(tcUrl, &port);
+	name = rtmp_urlparse(tcUrl, &port, NULL);
 	if ( NULL == name )
 		goto out_free;
 

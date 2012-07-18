@@ -345,6 +345,9 @@ static int invoke_connect(struct _mayhem *m)
 	invoke_t inv;
 	int ret = 0;
 
+	if ( is_premium(m) )
+		printf("mayhem: attempting PREMIUM login\n");
+
 	inv = mayhem_amf_connect(m->vars, is_premium(m));
 	if ( NULL == inv )
 		goto out;
