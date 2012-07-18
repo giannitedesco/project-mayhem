@@ -30,11 +30,17 @@ struct _mayhem {
 	rtmp_t rtmp;
 	netstatus_t ns;
 	wmvars_t vars;
+	char *vidpath;
 	const struct mayhem_ops *ops;
 	void *priv;
 	unsigned int state;
 	unsigned int sid;
 };
+
+static int is_premium(struct _mayhem *m)
+{
+	return (m->vars->sakey && strlen(m->vars->sakey));
+}
 
 void mayhem_abort(mayhem_t m)
 {
@@ -91,7 +97,10 @@ static int i_auth(mayhem_t m, invoke_t inv)
 	room.topic = amf_object_get_string(o_room, "roomtopic", NULL);
 	room.flags = amf_object_get_number(o_room, "flags", 0);
 
-	printf("%s\n", amf_get_string(o_sid));
+	/* XXX: Another way to get vid path, not via NaiadSet */
+#if 0
+	path = amf_get_string(o_sid);
+#endif
 
 	m->state = MAYHEM_STATE_AUTHORIZED;
 	if ( m->ops && m->ops->NaiadAuthorize )
@@ -102,7 +111,10 @@ static int i_auth(mayhem_t m, invoke_t inv)
 				atoi(amf_get_string(o_sid)),
 				&room);
 
-	/* For a pay-show, result is expected */
+	/* TODO: For a pay-show, result is expected */
+	if ( is_premium(m) ) {
+	}
+
 	return 1;
 }
 
@@ -247,7 +259,7 @@ static int i_pregold(mayhem_t m, invoke_t inv)
 }
 
 /* NaiadPledgeGold(number, null, {.amount = number, .status = number} */
-static int i_gold(mayhem_t m, invoke_t inv)
+static int i_pledge_gold(mayhem_t m, invoke_t inv)
 {
 	unsigned int a, s;
 	amf_t obj;
@@ -270,6 +282,34 @@ static int i_gold(mayhem_t m, invoke_t inv)
 	return 1;
 }
 
+/* NaiadSet(number = 0, null, string path, number = 1) */
+static int i_set(mayhem_t m, invoke_t inv)
+{
+	amf_t o_vidpath;
+
+	if ( !is_premium(m) )
+		printf("mayhem: NaiadSet: on non premium, weird?\n");
+
+	o_vidpath = amf_invoke_get(inv, 3);
+	if ( amf_type(o_vidpath) != AMF_STRING ) {
+		printf("mayhem: unable to get vidpath in NaiadSet\n");
+	}else{
+		char *path;
+		path = strdup(amf_get_string(o_vidpath));
+		if ( path ) {
+			free(m->vidpath);
+			m->vidpath = path;
+		}
+	}
+
+	if ( !netstatus_createstream(m->ns, 2.0) ) {
+		mayhem_abort(m);
+		return 1;
+	}
+
+	return 1;
+}
+
 static int naiad_dispatch(mayhem_t m, invoke_t inv, const char *method)
 {
 	static const struct {
@@ -280,10 +320,10 @@ static int naiad_dispatch(mayhem_t m, invoke_t inv, const char *method)
 		{.method = "NaiadAuthorized", .call = i_auth},
 		{.method = "NaiadUserList", .call = i_userlist},
 		{.method = "NaiadAddChat", .call = i_chat},
-		{.method = "NaiadPledgeGold", .call = i_gold},
+		{.method = "NaiadPledgeGold", .call = i_pledge_gold},
 		{.method = "NaiadPreGoldShow", .call = i_pregold},
+		{.method = "NaiadSet", .call = i_set},
 		/* NaiadGoldShow */
-		/* NaiadSet */
 		/* NaiadQualityChanged */
 		/* NaiadPause */
 		/* NaiadPlay */
@@ -333,11 +373,6 @@ static int invoke(void *priv, invoke_t inv)
 	if ( !ret )
 		return 0; /* unhandled */
 	return 1;
-}
-
-static int is_premium(struct _mayhem *m)
-{
-	return (m->vars->sakey && strlen(m->vars->sakey));
 }
 
 static int invoke_connect(struct _mayhem *m)
@@ -451,10 +486,18 @@ static void stream_connected(netstatus_t ns, void *priv)
 static void stream_created(netstatus_t ns, void *priv, unsigned int stream_id)
 {
 	struct _mayhem *m = priv;
+	amf_t path;
 
 	m->state = MAYHEM_STATE_GOT_STREAM;
-	/* for premium amf_string("mp4:..."), lets use realpath */
-	if ( !netstatus_play(m->ns, amf_stringf("%d", m->sid), stream_id) ) {
+
+	if ( is_premium(m) ) {
+		path = amf_string(m->vidpath);
+		printf("path is %s\n", amf_get_string(path));
+	}else{
+		path = amf_stringf("%d", m->sid);
+	}
+
+	if ( !netstatus_play(m->ns, path, stream_id) ) {
 		mayhem_abort(m);
 		return;
 	}
@@ -545,6 +588,7 @@ void mayhem_close(mayhem_t m)
 	if ( m ) {
 		netstatus_free(m->ns);
 		rtmp_close(m->rtmp);
+		free(m->vidpath);
 		free(m);
 	}
 }
