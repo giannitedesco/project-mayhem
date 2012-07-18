@@ -15,7 +15,7 @@
 #include "mayhem-amf.h"
 
 //#define SWF_URL "http://www.naiadsystems.com/flash/generic/20111122/avchat.swf"
-#define SWF_URL "http://www.naiadsystems.com/flash/generic/20120712-02a02f1/avchat.swf"
+#define SWF_URL "http://www.naiadsystems.com/flash/generic/20120712-02a02f1/load/avchat.swf"
 #define APP_VERS 7.0
 
 invoke_t mayhem_amf_start(void)

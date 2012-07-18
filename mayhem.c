@@ -462,8 +462,6 @@ static int notify(void *priv, struct rtmp_pkt *pkt,
 	amf_invoke_pretty_print(inv);
 	amf_invoke_free(inv);
 
-	invoke_start(m);
-
 	if ( m->ops && m->ops->stream_packet )
 		(*m->ops->stream_packet)(m->priv, pkt, buf, sz);
 
@@ -542,6 +540,7 @@ static void connect_error(netstatus_t ns, void *priv,
 static void start(netstatus_t ns, void *priv)
 {
 	struct _mayhem *m = priv;
+	invoke_start(m);
 	if ( m->ops && m->ops->stream_play )
 		(*m->ops->stream_play)(m->priv);
 }
