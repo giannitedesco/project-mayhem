@@ -1,14 +1,4 @@
-Windows port:
- - just requires os-win32.c implementing winsock stuff
-
-OSX port:
- - Cocoa/QTKit gui, best approach?
-
-Timestamp generation and bandwidth management:
- - Use real timestamps in rtmp code, where necessary
-
 Support legit account details on paid show
- - Need to scrape new vars, possibly handle logins/cookies
  - Support send chat, pledge gold, go pvt
 
 Support all message types:
@@ -19,5 +9,14 @@ AMF parsing:
  - Sometimes we get shit like CR or NUL in strings (eg. roomtopic)
  - Will we need more complete AMF3 parsing in practice? doesn't look like it
  - Nicer way to handle NaiadCheckup calls?
+
+Windows port:
+ - just requires os-win32.c implementing winsock stuff
+
+OSX port:
+ - Cocoa/QTKit gui, best approach?
+
+Timestamp generation and bandwidth management:
+ - Use real timestamps in rtmp code, where necessary
 
 Server and/or proxy?
