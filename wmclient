@@ -22,6 +22,8 @@ class VidSource:
 
 class VidStream(VidSource):
 	def read(self, sz = 0):
+		if not len(self.bufs):
+			return ''
 		buf = self.bufs.popleft()
 		self.cur_sz -= len(buf)
 		return buf
@@ -207,6 +209,30 @@ class VideoArea(gtk.DrawingArea):
 			self.pipeline.set_state(gst.STATE_NULL)
 
 class WebThread(threading.Thread):
+	class Task:
+		def __init__(self, cb):
+			self.cb = cb
+		def __repr__(self):
+			return self.__class__.__name__
+	class LoginTask(Task):
+		def __init__(self, login, pwd, cb):
+			WebThread.Task.__init__(self, cb)
+			self.login = login
+			self.pwd = pwd
+	class GetGirlTask(Task):
+		def __init__(self, url, cb):
+			WebThread.Task.__init__(self, cb)
+			self.url = urlparse(url)
+	class GetImageTask(Task):
+		def __init__(self, url, cb):
+			WebThread.Task.__init__(self, cb)
+			self.url = urlparse(url)
+	class GetGirlListTask(Task):
+		pass
+
+	USER_AGENT = 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:14.0) Gecko/20100101 Firefox/14.0.1'
+	ACCEPT_LANG = 'en-us,en;q=0.5'
+
 	def convert(self, d, url):
 		v = mayhem.vars()
 		v.sid = int(d['p_sid'])
@@ -222,38 +248,106 @@ class WebThread(threading.Thread):
 		v.g = d.get('p_g')
 		v.ldmov = d.get('p_ldmov')
 		v.sk = d.get('p_sk')
-		v.pageurl = url
-
-		#v.sakey = 'XXXXXXXX'
-		#v.sessiontype = 'preview'
+		v.pageurl = url.geturl()
 		return v
 
-	def got_vars(self, v):
-		gtk.gdk.threads_enter()
-		self.win.got_vars(v)
-		gtk.gdk.threads_leave()
+	def connect(self):
+		u = self.url
+		self.conn = httplib.HTTPConnection(u.hostname, u.port)
 
-	def __init__(self, url, win):
+	def __init__(self, url, login = None, pwd = None):
 		threading.Thread.__init__(self)
 		self.daemon = True
-		self.url = url
-		self.win = win
+		self.url = urlparse(url)
+		self.login = login
+		self.pwd = pwd
+		self.tasks = []
+		self.tasklock = threading.Lock()
+		self.wait = threading.Event(1)
+		self.iconn = {}
 
-	def run(self):
-		u = urlparse(self.url)
-		if u.scheme != 'http':
+		if self.url.scheme != 'http':
 			raise Exception, 'HTTP URLs only'
-		conn = httplib.HTTPConnection(u.hostname, u.port)
+
+		self.connect()
+
+	def do_get_girl_list(self, cb):
+		self.conn.request('GET', self.url.path)
+		r = self.conn.getresponse()
+		html = r.read()
+
+		h = pymayhem.CamRipper()
+		h.feed(html)
+		for cam in h.cams:
+			cb(cam.name, cam.url, cam.thumb)
+
+	def do_get_image(self, u, cb):
+		conn = self.iconn.get((u.hostname, u.port), None)
+		if conn is None:
+			print 'connect', u.hostname, u.port
+			conn = httplib.HTTPConnection(u.hostname, u.port)
+
 		conn.request('GET', u.path)
 		r = conn.getresponse()
-		if r.status != 200:
-			raise Exception, (r.status, r.reason)
+		self.iconn[(u.hostname, u.port)] = conn
+		cb(r.read())
+
+	def do_get_girl(self, url, cb):
+		self.conn.request('GET', url.path)
+		r = self.conn.getresponse()
 		html = r.read()
 
 		h = pymayhem.WebParser()
 		h.feed(html)
-		v = self.convert(h.result, self.url)
-		self.got_vars(v)
+		v = self.convert(h.result, url)
+		print v.tcUrl
+		cb(v)
+
+	def get_girl_list(self, cb):
+		t = self.GetGirlListTask(cb)
+		self.add_task(t)
+
+	def get_girl(self, url, cb):
+		t = self.GetGirlTask(url, cb)
+		self.add_task(t)
+
+	def get_image(self, url, cb):
+		t = self.GetImageTask(url, cb)
+		self.add_task(t)
+
+	def add_task(self, task):
+		self.tasklock.acquire()
+		self.tasks.append(task)
+		self.tasklock.release()
+		self.wait.set()
+
+	def do_task(self, task):
+		#print 'do task:', task
+		if isinstance(task, self.GetGirlListTask):
+			self.do_get_girl_list(task.cb)
+		elif isinstance(task, self.GetImageTask):
+			self.do_get_image(task.url, task.cb)
+		elif isinstance(task, self.GetGirlTask):
+			self.do_get_girl(task.url, task.cb)
+
+	def run(self):
+		while True:
+			self.wait.wait()
+
+			self.tasklock.acquire()
+			task = self.tasks.pop()
+			if not len(self.tasks):
+				self.wait.clear()
+			self.tasklock.release()
+
+			if task is not None:
+				try:
+					self.do_task(task)
+				except:
+					print task, 'failed: try again'
+					self.connect()
+					self.add_task(task)
+		return
 
 class ChatBar(gtk.VBox):
 	def __init__(self):
@@ -333,10 +427,11 @@ class Header(gtk.VBox):
 		self.pack_start(self.topic, True, True, 0)
 
 class Bitch(gtk.VBox):
-	def __init__(self, url):
+	def __init__(self, url, web):
 		gtk.VBox.__init__(self)
 
 		self.url = url
+		self.web = web
 
 		self.vid = VideoArea()
 		self.hdr = Header()
@@ -358,12 +453,15 @@ class Bitch(gtk.VBox):
 		self.hdr.performer.set_text('Loading...')
 		self.hdr.topic.set_text(url)
 
+		self.web.get_girl(url, self.got_vars)
+
 	def user_add(self, u):
 		self.userlist.append(u)
 	def user_del(self, u):
 		self.userlist.delete(u)
 
 	def got_vars(self, v):
+		gtk.gdk.threads_enter()
 		self.hdr.performer.set_text(v.pageurl)
 		self.hdr.topic.set_text(v.tcUrl)
 		try:
@@ -372,10 +470,7 @@ class Bitch(gtk.VBox):
 			if v.tcUrl is not None and len(v.tcUrl):
 				self.hdr.performer.set_text(v.tcUrl)
 			self.hdr.topic.set_text('Connection failed')
-
-	def start(self):
-		wt = WebThread(self.url, self)
-		wt.start()
+		gtk.gdk.threads_leave()
 
 class Connection(mayhem.mayhem):
 	def __init__(self, v, win):
@@ -489,6 +584,71 @@ class Connection(mayhem.mayhem):
 		s = '%s: %s'%(code, desc)
 		self.win.hdr.topic.set_text(s)
 
+class CamList(gtk.IconView):
+	class Cam:
+		def __init__(self, name, url, thumb):
+			self.name = name
+			self.url = url
+			self.thumb = thumb
+
+	def sel_changed(self, win):
+		sel = self.get_selected_items()
+		if not len(sel):
+			return
+		sel = sel[0]
+		itr = self.store.get_iter(sel)
+		if self.cb is not None:
+			name = self.store.get_value(itr, 0)
+			url = self.store.get_value(itr, 1)
+			self.cb(name, url)
+
+	def __init__(self, web, cb = None):
+		self.store = gtk.ListStore(gobject.TYPE_STRING,
+						gobject.TYPE_STRING,
+						gobject.TYPE_STRING,
+						gtk.gdk.Pixbuf)
+		gtk.IconView.__init__(self, self.store)
+		self.connect('selection-changed', self.sel_changed)
+		self.set_text_column(0)
+		self.set_pixbuf_column(3)
+		self.web = web
+		self.m = {}
+		self.cache = {}
+		self.cb = cb
+
+	def append(self, g):
+		thumb = self.cache.get(g.thumb, None)
+		itr = self.m.get(g.name, None)
+		if itr is None:
+			itr = self.store.append((g.name, g.url, g.thumb, thumb))
+			self.m[g.name] = itr
+		else:
+			self.store.set_value(itr, 0, g.name)
+			self.store.set_value(itr, 1, g.url)
+			self.store.set_value(itr, 2, g.thumb)
+			self.store.set_value(itr, 3, thumb)
+
+		def Closure(pic):
+			gtk.gdk.threads_enter()
+			ldr = gtk.gdk.PixbufLoader()
+			ldr.set_size(64, 48)
+			ldr.write(pic)
+			ldr.close()
+			pixmap = ldr.get_pixbuf()
+			self.store.set_value(itr, 3, pixmap)
+			gtk.gdk.threads_leave()
+
+		self.web.get_image(g.thumb, Closure)
+
+	def delete(self, g):
+		itr = self.m.get(g.name, None)
+		if itr is None:
+			return
+		self.store.remove(itr)
+
+	def add_girl(self, name, url, thumb):
+		self.append(self.Cam(name, url, thumb))
+
 class MainWin(gtk.Window):
 	def destroy(self, *_):
 		gtk.Window.destroy(self)
@@ -506,25 +666,49 @@ class MainWin(gtk.Window):
 		agr.connect_group(k, m, gtk.ACCEL_VISIBLE, cb)
 		self.add_accel_group(agr)
 
-	def __init__(self, url):
+	def clicked(self, name, url):
+		tab = self.bitches.get(name, None)
+		if tab is not None:
+			self.tabs.set_current_page(tab)
+			return
+
+		bitch = Bitch(url, self.web)
+		ret = self.tabs.append_page(bitch, gtk.Label(name))
+		self.bitches[name] = ret
+		self.tabs.show_all()
+
+	def __init__(self):
 		gtk.Window.__init__(self, gtk.WINDOW_TOPLEVEL)
 		self.in_main = False
 		self.connect('destroy', self.destroy)
 		self.set_default_size(640, 480)
 		self.set_title('Webcam Mayhem')
+		self.bitches = {}
 
 		self.__accel('<Control>Q', self.destroy)
 		self.__accel('<Control>W', self.destroy)
 
-		self.bitch = Bitch(url)
-		self.add(self.bitch)
+		self.web = WebThread('http://webcammayhem.com/')
+		self.web.start()
+
+		p = gtk.HPaned()
+		self.add(p)
+
+		scr = gtk.ScrolledWindow()
+		scr.set_policy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
+		p.add2(scr)
+
+		self.camlist = CamList(self.web, self.clicked)
+		self.web.get_girl_list(self.camlist.add_girl)
+		scr.add(self.camlist)
+
+		self.tabs = gtk.Notebook()
+		p.add1(self.tabs)
 
 		self.show_all()
-		self.bitch.start()
 
 if __name__ == '__main__':
-	from sys import argv
 	gobject.threads_init()
 	gtk.gdk.threads_init()
-	x = MainWin(argv[1])
+	x = MainWin()
 	x.main()
