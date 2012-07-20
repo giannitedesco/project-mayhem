@@ -283,9 +283,10 @@ class Header(gtk.VBox):
 		self.pack_start(self.topic, True, True, 0)
 
 class Bitch(gtk.VBox):
-	def __init__(self, url, web):
+	def __init__(self, name, url, web):
 		gtk.VBox.__init__(self)
 
+		self.tabname = name
 		self.url = url
 		self.web = web
 
@@ -524,6 +525,72 @@ class CamList(gtk.IconView):
 	def add_girl(self, name, url, thumb):
 		self.append(self.Cam(name, url, thumb))
 
+class Tabs(gtk.Notebook):
+	def __init__(self, cls):
+		gtk.Notebook.__init__(self)
+		self.__map = {}
+		self.__cls = cls
+
+	def __title(self, label, *sig):
+		icon = gtk.Image()
+		icon.set_from_stock(gtk.STOCK_CLOSE, gtk.ICON_SIZE_MENU)
+		cb = gtk.Button()
+		cb.set_relief(gtk.RELIEF_NONE)
+		cb.set_focus_on_click(False)
+		cb.set_border_width(0)
+		cb.add(icon)
+		cb.connect('clicked', *sig)
+
+		style = gtk.RcStyle()
+		style.xthickness = 0
+		style.ythickness = 0
+		cb.modify_style(style)
+
+		hb = gtk.HBox()
+		hb.add(gtk.Label(label))
+		hb.add(cb)
+		hb.show_all()
+		return hb
+
+	def __page_nr(self, app):
+		assert(isinstance(app, gtk.Widget))
+		i = 0
+		for i in xrange(self.get_n_pages()):
+			win = self.get_nth_page(i)
+			if app is win:
+				return i
+			i += 1
+		raise KeyError
+
+	def close_tab(self, idx = None):
+		if idx is None:
+			idx = self.get_current_page()
+			win = self.get_nth_page(idx)
+		elif isinstance(idx, gtk.Widget):
+			win = idx
+			idx = self.__page_nr(win)
+		else:
+			win = self.get_nth_page(idx)
+
+		del self.__map[win.tabname]
+		self.remove_page(idx)
+		return
+
+	def __close_tab(self, button, tab = None):
+		return self.close_tab(tab)
+
+	def open_tab(self, name, *args):
+		if not self.__map.has_key(name):
+			win = self.__cls(*args)
+			t = self.__title(name, self.__close_tab, win)
+			idx = self.append_page(win, t)
+			self.set_tab_reorderable(win, True)
+			self.__map[name] = idx
+			self.show_all()
+
+		self.set_current_page(self.__map[name])
+		return self.get_nth_page(self.get_current_page())
+
 class MainWin(gtk.Window):
 	def destroy(self, *_):
 		gtk.Window.destroy(self)
@@ -542,16 +609,7 @@ class MainWin(gtk.Window):
 		self.add_accel_group(agr)
 
 	def clicked(self, name, url):
-		tab = self.bitches.get(name, None)
-		if tab is not None:
-			self.tabs.set_current_page(tab)
-			return
-
-		bitch = Bitch(url, self.web)
-		ret = self.tabs.append_page(bitch, gtk.Label(name))
-		self.bitches[name] = ret
-		self.tabs.show_all()
-		self.tabs.set_current_page(tab)
+		self.tabs.open_tab(name, name, url, self.web)
 
 	def __init__(self):
 		gtk.Window.__init__(self, gtk.WINDOW_TOPLEVEL)
@@ -574,14 +632,15 @@ class MainWin(gtk.Window):
 		p.add2(scr)
 
 		self.camlist = CamList(self.web, self.clicked)
-		self.web.get_girl_list('http://webcammayhem.com/',
-					self.camlist.add_girl)
 		scr.add(self.camlist)
 
-		self.tabs = gtk.Notebook()
+		self.tabs = Tabs(Bitch)
 		p.add1(self.tabs)
 
 		self.show_all()
+
+		self.web.get_girl_list('http://webcammayhem.com/',
+					self.camlist.add_girl)
 
 if __name__ == '__main__':
 	gobject.threads_init()
