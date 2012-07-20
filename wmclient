@@ -316,7 +316,26 @@ class Bitch(gtk.VBox):
 	def user_del(self, u):
 		self.userlist.delete(u)
 
-	def got_vars(self, v):
+	def convert(self, d, url):
+		v = mayhem.vars()
+		v.sid = int(d['p_sid'])
+		v.pid = int(d['p_pid'])
+		v.hd = int(d.get('p_hd', 0))
+		v.ft = int(d['p_ft'])
+		v.srv = int(d['p_srv'])
+		v.tcUrl = d['turbo'].rsplit(';', 1)[0]
+		v.signupargs = d.get('p_signupargs')
+		v.sessiontype = d.get('sessionType')
+		v.nickname = d.get('p_nickname')
+		v.sakey = d.get('p_sakey')
+		v.g = d.get('p_g')
+		v.ldmov = d.get('p_ldmov')
+		v.sk = d.get('p_sk')
+		v.pageurl = url.geturl()
+		return v
+
+	def got_vars(self, d, url):
+		v = self.convert(d, url)
 		gtk.gdk.threads_enter()
 		self.hdr.performer.set_text(v.pageurl)
 		self.hdr.topic.set_text(v.tcUrl)
@@ -532,6 +551,7 @@ class MainWin(gtk.Window):
 		ret = self.tabs.append_page(bitch, gtk.Label(name))
 		self.bitches[name] = ret
 		self.tabs.show_all()
+		self.tabs.set_current_page(tab)
 
 	def __init__(self):
 		gtk.Window.__init__(self, gtk.WINDOW_TOPLEVEL)
@@ -544,8 +564,7 @@ class MainWin(gtk.Window):
 		self.__accel('<Control>Q', self.destroy)
 		self.__accel('<Control>W', self.destroy)
 
-		self.web = pymayhem.WebThread('http://webcammayhem.com/')
-		self.web.start()
+		self.web = pymayhem.WebThread()
 
 		p = gtk.HPaned()
 		self.add(p)
@@ -555,7 +574,8 @@ class MainWin(gtk.Window):
 		p.add2(scr)
 
 		self.camlist = CamList(self.web, self.clicked)
-		self.web.get_girl_list(self.camlist.add_girl)
+		self.web.get_girl_list('http://webcammayhem.com/',
+					self.camlist.add_girl)
 		scr.add(self.camlist)
 
 		self.tabs = gtk.Notebook()
