@@ -210,10 +210,18 @@ class VideoArea(gtk.DrawingArea):
 			self.pipeline.set_state(gst.STATE_NULL)
 
 class ChatBar(gtk.VBox):
-	def __init__(self):
+	def sndchat(self, *_):
+		s = self.entry.get_text()
+		if self.cb is None or self.cb(s):
+			self.entry.set_text('')
+
+	def __init__(self, cb):
 		gtk.VBox.__init__(self)
+		self.cb = cb
+
 		self.nick = gtk.Label('guest')
 		self.entry = gtk.Entry()
+		self.entry.connect('activate', self.sndchat)
 
 		hb = gtk.HBox()
 		hb.pack_start(self.nick, False, False, 8)
@@ -222,6 +230,15 @@ class ChatBar(gtk.VBox):
 		self.chat = gtk.TextView()
 		self.chat.set_border_window_size(gtk.TEXT_WINDOW_LEFT, 8)
 		self.chat.set_editable(False)
+		self.chat.set_cursor_visible(False)
+
+		buf = self.chat.get_buffer()
+		tag = buf.create_tag('bold')
+		tag.set_property('weight', pango.WEIGHT_BOLD)
+
+		tag = buf.create_tag('blue')
+		tag.set_property('foreground', 'blue')
+		tag.set_property('foreground-set', True) 
 
 		scr = gtk.ScrolledWindow()
 		scr.set_policy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
@@ -290,6 +307,13 @@ class Header(gtk.VBox):
 		self.pack_start(self.progress, True, True, 0)
 
 class Bitch(gtk.VBox):
+	def sndchat(self, msg):
+		if self.conn is None:
+			return False
+		self.conn.snd_chat(msg)
+		self.conn.add_chat(None, msg, myself = True)
+		return True
+
 	def __init__(self, name, url, web):
 		gtk.VBox.__init__(self)
 
@@ -299,7 +323,7 @@ class Bitch(gtk.VBox):
 
 		self.vid = VideoArea()
 		self.hdr = Header()
-		self.chatbar = ChatBar()
+		self.chatbar = ChatBar(self.sndchat)
 		self.userlist = UserList()
 
 		scr = gtk.ScrolledWindow()
@@ -458,13 +482,34 @@ class Connection(mayhem.mayhem):
 		self.gold_show.pledgedamt += int(amt)
 		self.gold_update_progress()
 
-	def NaiadAddChat(self, nick, chat):
-		s = '<%s> %s\n'%(nick, chat)
+	def add_chat(self, nick, chat, myself = False):
 		buf = self.win.chatbar.chat.get_buffer()
-		buf.insert_at_cursor(s)
+
+		if myself:
+			tags = ['bold']
+			nick = self.win.chatbar.nick.get_text()
+			s = '<%s> %s\n'%(nick, chat)
+		elif nick is None:
+			tags = ['bold', 'blue']
+			s = chat + '\n'
+		else:
+			s = '<%s> %s\n'%(nick, chat)
+			tags = []
+
+		# set cursor at end of text
+		i = buf.get_iter_at_offset(buf.get_char_count())
+		buf.place_cursor(i)
+
+		# set text at cursor
+		buf.insert_with_tags_by_name(i, s, *tags)
+
+		# set cursor back to end of text and scroll there
 		i = buf.get_iter_at_offset(buf.get_char_count())
 		buf.place_cursor(i)
 		self.win.chatbar.chat.scroll_to_iter(i, 0.25)
+
+	def NaiadAddChat(self, nick, chat):
+		self.add_chat(nick, chat)
 
 	def NaiadUserList(self, ac, ul):
 		#print ac

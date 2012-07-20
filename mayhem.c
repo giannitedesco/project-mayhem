@@ -75,6 +75,7 @@ out:
 	amf_invoke_free(inv);
 	return ret;
 }
+
 static int i_auth(mayhem_t m, invoke_t inv)
 {
 	amf_t o_rc, o_nick, o_bitch, o_sid, o_room;
@@ -467,6 +468,47 @@ static int notify(void *priv, struct rtmp_pkt *pkt,
 		(*m->ops->stream_packet)(m->priv, pkt, buf, sz);
 
 	return 1;
+}
+
+int mayhem_snd_chat(mayhem_t m, const char *msg)
+{
+	invoke_t inv;
+	int ret = 0;
+
+	inv = amf_invoke_new(10);
+	if ( NULL == inv ) {
+		return 0;
+	}
+
+	if ( !amf_invoke_set(inv, 0, amf_string("NaiadSndChat")) )
+		goto out;
+	if ( !amf_invoke_set(inv, 1, amf_number(0.0)) )
+		goto out;
+	if ( !amf_invoke_set(inv, 2, amf_null()) )
+		goto out;
+	if ( !amf_invoke_set(inv, 3, amf_number(0.0)) )
+		goto out;
+	if ( !amf_invoke_set(inv, 4, amf_string("")) )
+		goto out;
+	if ( !amf_invoke_set(inv, 5, amf_string(msg)) )
+		goto out;
+	if ( !amf_invoke_set(inv, 6, amf_string("")) )
+		goto out;
+	if ( !amf_invoke_set(inv, 7, amf_bool(0)) )
+		goto out;
+	if ( !amf_invoke_set(inv, 8, amf_string("")) )
+		goto out;
+	if ( !amf_invoke_set(inv, 9, amf_stringf("<P ALIGN=\"LEFT\">"
+				"<FONT FACE=\"Arial\" SIZE=\"11\" "
+				"COLOR=\"#000000\" "
+				"LETTERSPACING=\"0\" "
+				"KERNING=\"0\">%s</FONT></P>", msg)) )
+		goto out;
+
+	ret = rtmp_flex_invoke(m->rtmp, 3, 0, inv);
+out:
+	amf_invoke_free(inv);
+	return ret;
 }
 
 static int rip(void *priv, struct rtmp_pkt *pkt,

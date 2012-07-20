@@ -226,6 +226,7 @@ static int std_result(netstatus_t ns, invoke_t inv)
 		{.code = "NetStream.Play.Transition",},
 		{.code = "NetStream.Play.InsufficientBW",},
 		{.code = "NetStream.Play.Failed", .fn = play_error},
+		{.code = "NetStream.Pause.Notify", },
 	};
 	struct netstatus_event st;
 	unsigned int rc, i;

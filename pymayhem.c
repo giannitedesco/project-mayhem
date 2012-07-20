@@ -380,6 +380,22 @@ static PyObject *pymayhem_abort(struct pymayhem *self)
 	return Py_None;
 }
 
+static PyObject *pymayhem_snd_chat(struct pymayhem *self, PyObject *args,
+					PyObject *kwds)
+{
+	const char *msg;
+
+	if ( !PyArg_ParseTuple(args, "s", &msg) )
+		return NULL;
+
+	if ( !mayhem_snd_chat(self->mayhem, msg) ) {
+		pymayhem_error("mayhem_snd_chat failed");
+		return NULL;
+	}
+	Py_INCREF(Py_None);
+	return Py_None;
+}
+
 static struct eventloop eventloop_app = {
 	.name = "app",
 	.init = app_init,
@@ -448,6 +464,9 @@ static void pymayhem_dealloc(struct pymayhem *self)
 }
 
 static PyMethodDef pymayhem_methods[] = {
+	{"snd_chat",(PyCFunction)pymayhem_snd_chat, METH_VARARGS,
+		"mayhem.snd_chat(string) - Send a chat message"},
+
 	{"nbio_set_active",(PyCFunction)pymayhem_set_active, METH_VARARGS,
 		"mayhem.nbio_set_active(fd, flags) - Make an fd active"},
 	{"nbio_pump",(PyCFunction)pymayhem_pump, METH_NOARGS,

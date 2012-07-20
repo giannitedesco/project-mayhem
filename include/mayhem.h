@@ -73,6 +73,7 @@ struct mayhem_ops {
 
 mayhem_t mayhem_connect(struct iothread *t, wmvars_t vars,
 			const struct mayhem_ops *ops, void *priv);
+int mayhem_snd_chat(mayhem_t m, const char *msg);
 void mayhem_abort(mayhem_t m);
 void mayhem_close(mayhem_t m);
 
