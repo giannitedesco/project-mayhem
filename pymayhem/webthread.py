@@ -80,9 +80,13 @@ class WebThread:
 			self.conn[(url.hostname, url.port)] = conn
 		return conn
 
-	def get_girl_list(self, url, cb):
+	def get_girl_list(self, url, cb, err = None):
 		url = urlparse(url)
 		def Closure(r, data):
+			if isinstance(r, Exception) or r.status != 200:
+				if err:
+					err(r)
+				return
 			h = CamRipper()
 			h.feed(data)
 			for cam in h.cams:
@@ -92,18 +96,26 @@ class WebThread:
 		req = WebReq(Closure, url)
 		conn.pushreq(req)
 
-	def get_image(self, url, cb):
+	def get_image(self, url, cb, err = None):
 		url = urlparse(url)
 		def Closure(r, data):
+			if isinstance(r, Exception) or r.status != 200:
+				if err:
+					err(r)
+				return
 			cb(data)
 
 		conn = self.get_conn(url)
 		req = WebReq(Closure, url)
 		conn.pushreq(req)
 
-	def get_girl(self, url, cb):
+	def get_girl(self, url, cb, err = None):
 		url = urlparse(url)
 		def Closure(r, data):
+			if isinstance(r, Exception) or r.status != 200:
+				if err:
+					err(r)
+				return
 			h = WebParser()
 			h.feed(data)
 			cb(h.result, url)

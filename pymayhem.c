@@ -461,6 +461,6 @@ PyTypeObject mayhem_pytype = {
 	.tp_dealloc = (destructor)pymayhem_dealloc,
 	.tp_methods = pymayhem_methods,
 	.tp_getset = pymayhem_attribs,
-	.tp_doc = "ELF file",
+	.tp_doc = "Webcam Mayhem Module",
 };
 

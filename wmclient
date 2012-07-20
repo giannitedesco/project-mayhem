@@ -19,10 +19,11 @@ class VidSource:
 
 class VidStream(VidSource):
 	def read(self, sz = 0):
-		if not len(self.bufs):
+		try:
+			buf = self.bufs.popleft()
+			self.cur_sz -= len(buf)
+		except IndexError:
 			return ''
-		buf = self.bufs.popleft()
-		self.cur_sz -= len(buf)
 		return buf
 	def ready(self):
 		if not self.cur_sz or self.prebuffer:
@@ -92,6 +93,7 @@ class VidPipeline(gst.Pipeline):
 		while self.vid.ready():
 			buf = self.vid.read()
 			self.appsrc.emit('push-buffer', gst.Buffer(buf))
+
 	def enough_data(self, src):
 #		print 'enough-data'
 		self.needy = False
@@ -310,7 +312,7 @@ class Bitch(gtk.VBox):
 		self.hdr.performer.set_text('Loading...')
 		self.hdr.topic.set_text(url)
 
-		self.web.get_girl(url, self.got_vars)
+		self.web.get_girl(url, self.got_vars, self.got_err)
 
 	def user_add(self, u):
 		self.userlist.append(u)
@@ -335,6 +337,12 @@ class Bitch(gtk.VBox):
 		v.pageurl = url.geturl()
 		return v
 
+	def got_err(self, r):
+		if isinstance(r, Exception):
+			self.hdr.topic.set_text(str(r))
+		else:
+			self.hdr.topic.set_text('%s - %s'%(r.status, r.reason))
+
 	def got_vars(self, d, url):
 		v = self.convert(d, url)
 		gtk.gdk.threads_enter()
@@ -347,6 +355,10 @@ class Bitch(gtk.VBox):
 				self.hdr.performer.set_text(v.tcUrl)
 			self.hdr.topic.set_text('Connection failed')
 		gtk.gdk.threads_leave()
+
+	def tabclose(self):
+		print 'stopping vid'
+		self.vid.stop()
 
 class Connection(mayhem.mayhem):
 	def __init__(self, v, win):
@@ -487,6 +499,7 @@ class CamList(gtk.IconView):
 		self.connect('selection-changed', self.sel_changed)
 		self.set_text_column(0)
 		self.set_pixbuf_column(3)
+		self.set_tooltip_column(1)
 		self.web = web
 		self.m = {}
 		self.cache = {}
@@ -572,6 +585,7 @@ class Tabs(gtk.Notebook):
 		else:
 			win = self.get_nth_page(idx)
 
+		win.tabclose()
 		del self.__map[win.tabname]
 		self.remove_page(idx)
 		return
