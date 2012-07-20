@@ -59,6 +59,7 @@ struct mayhem_ops {
 	void (*NaiadAddChat)(void *priv, const char *nick, const char *chat);
 	void (*NaiadUserList)(void *priv, unsigned int ac,
 				struct naiad_user *usr, unsigned int num_usr);
+	void (*NaiadPledgeGold)(void *priv, double amt, double status);
 
 	void (*stream_error)(void *priv, const char *code, const char *desc);
 	void (*stream_play)(void *priv);

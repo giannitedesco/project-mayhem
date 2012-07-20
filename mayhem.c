@@ -287,7 +287,7 @@ static int i_pregold(mayhem_t m, invoke_t inv)
 /* NaiadPledgeGold(number, null, {.amount = number, .status = number} */
 static int i_pledge_gold(mayhem_t m, invoke_t inv)
 {
-	unsigned int a, s;
+	double a, s;
 	amf_t obj;
 
 	if ( amf_invoke_nargs(inv) < 4 ) {
@@ -304,7 +304,8 @@ static int i_pledge_gold(mayhem_t m, invoke_t inv)
 	a = amf_object_get_number(obj, "amount", 0);
 	s = amf_object_get_number(obj, "status", 0);
 
-	printf("mayhem: gold pledged: %d (flags = %d)\n", a / 100, s);
+	if ( m->ops && m->ops->NaiadPledgeGold )
+		(m->ops->NaiadPledgeGold)(m->priv, a, s);
 	return 1;
 }
 

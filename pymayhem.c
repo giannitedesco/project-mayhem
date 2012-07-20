@@ -133,6 +133,18 @@ static void NaiadPreGoldShow(void *priv, struct naiad_goldshow *gs)
 	Py_DECREF(ret);
 }
 
+static void NaiadPledgeGold(void *priv, double amt, double status)
+{
+	PyObject *ret, *self = priv;
+	ret = PyObject_CallMethod(self, "NaiadPledgeGold",
+					"dd",
+					amt,
+					status);
+	if ( NULL == ret )
+		return;
+	Py_DECREF(ret);
+}
+
 static void NaiadAddChat(void *priv, const char *nick, const char *chat)
 {
 	PyObject *self = priv;
@@ -383,9 +395,10 @@ static int pymayhem_init(struct pymayhem *self, PyObject *args, PyObject *kwds)
 	static const struct mayhem_ops ops = {
 		.NaiadAuthorize = NaiadAuthorize,
 		.NaiadFreeze = NaiadFreeze,
-		.NaiadPreGoldShow = NaiadPreGoldShow,
 		.NaiadAddChat = NaiadAddChat,
 		.NaiadUserList = NaiadUserList,
+		.NaiadPreGoldShow = NaiadPreGoldShow,
+		.NaiadPledgeGold = NaiadPledgeGold,
 
 		.stream_play = play,
 		.stream_reset = reset,

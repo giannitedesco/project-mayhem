@@ -48,6 +48,11 @@ static void NaiadPreGoldShow(void *priv, struct naiad_goldshow *gs)
 	printf(" requested = %d\n", gs->requestedamt);
 }
 
+static void NaiadPledgeGold(void *priv, double amt, double status)
+{
+	printf("Pledge gold: amt=%f status=%f\n", amt, status);
+}
+
 static void NaiadAddChat(void *priv, const char *nick, const char *chat)
 {
 	printf("<%s> %s\n", nick, chat);
@@ -129,6 +134,7 @@ static struct dumper *dumper_new(struct iothread *t, const char *varfile)
 		.NaiadFreeze = NaiadFreeze,
 		.NaiadAddChat = NaiadAddChat,
 		.NaiadPreGoldShow = NaiadPreGoldShow,
+		.NaiadPledgeGold = NaiadPledgeGold,
 
 		.stream_play = play,
 		.stream_reset = reset,

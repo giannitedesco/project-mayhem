@@ -62,18 +62,16 @@ class VidFile(VidSource):
 
 class VidPipeline(gst.Pipeline):
 	def codec_by_name(self, codec):
+		print codec
 		if codec == 'video/x-vp6-flash':
 			self.vdec = gst.element_factory_make('ffdec_vp6f',
 								'vdec')
 		elif codec == 'video/x-h264':
-			print codec
 			self.vdec = gst.element_factory_make('ffdec_h264',
 								'vdec')
 		elif codec == 'video/x-flash-video':
-			print 'uh...'
 			Assert(False)
 		else:
-			print codec
 			Assert(False)
 		self.add(self.vdec)
 		self.vdec.sync_state_with_parent()
@@ -385,6 +383,7 @@ class Connection(mayhem.mayhem):
 		self.pkts = 0
 		self.vidsrc = None
 		self.bitch = None
+		self.gold_show = None
 		# must be last
 		mayhem.mayhem.__init__(self, v)
 
@@ -440,8 +439,24 @@ class Connection(mayhem.mayhem):
 		self.win.hdr.topic.set_text(desc)
 		self.abort()
 
+	def gold_update_progress(self):
+		if self.gold_show is None:
+			return
+		self.win.progress(float(self.gold_show.pledgedamt) /
+				float(self.gold_show.requestedamt),
+			'$ %.2f / %.2f'%(self.gold_show.pledgedamt / 100,
+					self.gold_show.requestedamt / 100))
+
 	def NaiadPreGoldShow(self, gs):
+		self.gold_show = gs
 		self.win.hdr.topic.set_text('GOLD: ' + gs.showtopic)
+		self.gold_update_progress()
+
+	def NaiadPledgeGold(self, amt, status):
+		if self.gold_show is None:
+			return
+		self.gold_show.pledgedamt += int(amt)
+		self.gold_update_progress()
 
 	def NaiadAddChat(self, nick, chat):
 		s = '<%s> %s\n'%(nick, chat)
@@ -471,6 +486,7 @@ class Connection(mayhem.mayhem):
 					'buffering...')
 		else:
 			self.win.progress(1.0, 'done', True)
+			self.gold_update_progress()
 
 	def stream_play(self):
 		b = self.bitch is not None and self.bitch or 'UNKNOWN'
