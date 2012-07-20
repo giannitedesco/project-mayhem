@@ -25,6 +25,10 @@ class VidStream(VidSource):
 		except IndexError:
 			return ''
 		return buf
+	def progress(self):
+		a = float(self.prebuffer_max)
+		b = float(self.prebuffer_max - self.prebuffer)
+		return b / a
 	def ready(self):
 		if not self.cur_sz or self.prebuffer:
 			return False
@@ -33,8 +37,6 @@ class VidStream(VidSource):
 		self.bufs.append(buf)
 		self.cur_sz += len(buf)
 		if len(buf) >= self.prebuffer:
-			if self.prebuffer:
-				print 'buffered'
 			self.prebuffer = 0
 		else:
 			self.prebuffer -= len(buf)
@@ -45,6 +47,7 @@ class VidStream(VidSource):
 	def __init__(self, prebuffer = (1 << 19), out = None):
 		self.bufs = deque()
 		self.prebuffer = prebuffer
+		self.prebuffer_max = prebuffer
 		self.cur_sz = 0
 		if out is not None:
 			self.out = file(out, 'w')
@@ -90,9 +93,9 @@ class VidPipeline(gst.Pipeline):
 	def need_data(self, src, size):
 #		print 'need-data', size
 		self.needy = True
-		while self.vid.ready():
-			buf = self.vid.read()
-			self.appsrc.emit('push-buffer', gst.Buffer(buf))
+#		while self.vid.ready():
+#			buf = self.vid.read()
+#			self.appsrc.emit('push-buffer', gst.Buffer(buf))
 
 	def enough_data(self, src):
 #		print 'enough-data'
@@ -101,7 +104,8 @@ class VidPipeline(gst.Pipeline):
 	def push_data(self, buf):
 #		print 'push-data'
 		self.vid.push(buf)
-		while self.needy and self.vid.ready():
+		#while self.needy and self.vid.ready():
+		while self.vid.ready():
 			buf = self.vid.read()
 			self.appsrc.emit('push-buffer', gst.Buffer(buf))
 
@@ -281,8 +285,11 @@ class Header(gtk.VBox):
 		self.topic.set_line_wrap(True)
 		self.topic.set_width_chars(80)
 
+		self.progress = gtk.ProgressBar()
+
 		self.pack_start(self.performer, True, True, 0)
 		self.pack_start(self.topic, True, True, 0)
+		self.pack_start(self.progress, True, True, 0)
 
 class Bitch(gtk.VBox):
 	def __init__(self, name, url, web):
@@ -313,6 +320,8 @@ class Bitch(gtk.VBox):
 		self.hdr.topic.set_text(url)
 
 		self.web.get_girl(url, self.got_vars, self.got_err)
+		self.show_all()
+		self.hdr.progress.hide()
 
 	def user_add(self, u):
 		self.userlist.append(u)
@@ -343,6 +352,15 @@ class Bitch(gtk.VBox):
 		else:
 			self.hdr.topic.set_text('%s - %s'%(r.status, r.reason))
 
+	def progress(self, fraction, text, hide = False):
+		self.hdr.progress.set_fraction(fraction)
+		self.hdr.progress.set_text(text)
+		if hide:
+			self.hdr.progress.hide_all()
+		else:
+			self.hdr.show_all()
+		return
+
 	def got_vars(self, d, url):
 		v = self.convert(d, url)
 		gtk.gdk.threads_enter()
@@ -357,7 +375,6 @@ class Bitch(gtk.VBox):
 		gtk.gdk.threads_leave()
 
 	def tabclose(self):
-		print 'stopping vid'
 		self.vid.stop()
 
 class Connection(mayhem.mayhem):
@@ -445,8 +462,15 @@ class Connection(mayhem.mayhem):
 
 	def push_flv(self, buf):
 		if self.vidsrc is None:
+			self.win.progress(0.0, 'nothing here', True)
 			return
 		self.win.vid.pipeline.push_data(buf)
+
+		if self.win.vid.pipeline.vid.prebuffer:
+			self.win.progress(self.win.vid.pipeline.vid.progress(),
+					'buffering...')
+		else:
+			self.win.progress(1.0, 'done', True)
 
 	def stream_play(self):
 		b = self.bitch is not None and self.bitch or 'UNKNOWN'
@@ -600,7 +624,6 @@ class Tabs(gtk.Notebook):
 			idx = self.append_page(win, t)
 			self.set_tab_reorderable(win, True)
 			self.__map[name] = idx
-			self.show_all()
 
 		self.set_current_page(self.__map[name])
 		return self.get_nth_page(self.get_current_page())
