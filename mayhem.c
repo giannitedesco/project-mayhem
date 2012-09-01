@@ -445,29 +445,34 @@ static int notify(void *priv, struct rtmp_pkt *pkt,
 	struct _mayhem *m = priv;
 	invoke_t inv;
 	amf_t a;
+	int ret = 0;
 
 	inv = amf_invoke_from_buf(buf, sz);
 	if ( NULL == inv )
-		return 1;
+		goto out;
 
 	if ( amf_invoke_nargs(inv) < 1 )
-		return 1;
+		goto out_free;
 
 	a = amf_invoke_get(inv, 0);
 	if ( NULL == a || amf_type(a) != AMF_STRING )
-		return 1;
+		goto out_free;
 
 	if ( strcmp(amf_get_string(a), "onMetaData") )
-		return 1;
+		goto out_free;
 
 	printf("Video metadata:\n");
 	amf_invoke_pretty_print(inv);
-	amf_invoke_free(inv);
 
 	if ( m->ops && m->ops->stream_packet )
 		(*m->ops->stream_packet)(m->priv, pkt, buf, sz);
 
-	return 1;
+	ret = 1;
+
+out_free:
+	amf_invoke_free(inv);
+out:
+	return ret;
 }
 
 int mayhem_snd_chat(mayhem_t m, const char *msg)
