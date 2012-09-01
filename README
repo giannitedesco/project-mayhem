@@ -1,1 +1,67 @@
-In death, members of project mayhem have a name.
+===============================================================================
+Project-mayhem: A native streamate/webcam-mayhem client
+Copyright (c) 2011-2012 Gianni Tedesco <gianni at scaramanga dot co dot uk>
+This software is released under the GNU GPL version 3 (see: COPYING)
+===============================================================================
+
+0x0. Introduction
+-----------------
+
+This is a native client for streamate webcam websites. It works for all such
+websites implementing the naiad systems API.
+
+It contains:
+ - RTMP client
+ - NetStream / NetConnection media control interfaces
+ - AMF, and basic AMF3 parsers
+ - A fair chunk of the Naiad flex application protocol
+ - Python interfaces to much of the above
+
+There are:
+ - Python scripts for scraping details with and without login
+ - wmdump: C application to dump a webcam stream to FLV
+ - wmclient: A GTK interface to streamate sites
+
+Compared to the flash web based client it allows you to:
+ - record streams directly from the wire with no re-encoding
+ - copy and paste from chat
+ - watch more than one stream simultaneously
+ - more?
+
+0x1. Compilation from Source
+----------------------------
+
+The following command ought to do it:
+
+ $ ./configure && make
+
+
+0x2. TODO list
+--------------
+
+IDL language for generating C code/structs to wrap
+arbitrary flex protcols? Would be pretty neat!
+
+Support all message types:
+ - Handle gold show status changes
+ - Support pledge gold, go pvt
+ - Decode HTML entities, smilies in chat
+
+AMF parsing:
+ - Sometimes we get shit like CR or NUL in strings (eg. roomtopic)
+ - Will we need more complete AMF3 parsing in practice? doesn't look like it
+ - Nicer way to handle NaiadCheckup calls?
+
+wmclient:
+ - Tiled, video-only, mode
+
+Windows port:
+ - just requires os-win32.c implementing winsock stuff
+
+OSX port:
+ - Cocoa/QTKit gui, best approach?
+
+Timestamp generation and bandwidth management:
+ - Use real timestamps in rtmp code, where necessary
+
+Server and/or proxy?
