@@ -17,9 +17,14 @@ typedef struct _mayhem *mayhem_t;
 #define MAYHEM_FLAGS_PARTYCHAT		(1<<6)
 #define MAYHEM_FLAGS_GOLDSYS		(1<<7)
 #define MAYHEM_FLAGS_EXTSS		(1<<8)
+struct foo {
+	const char *a;
+	unsigned int b;
+};
 struct naiad_room {
 	unsigned int flags;
 	const char *topic;
+	struct foo foo;
 };
 
 #define MAYHEM_GOLDSHOW_START		2

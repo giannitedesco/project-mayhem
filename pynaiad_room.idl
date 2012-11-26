@@ -2,7 +2,7 @@ from idl import Struct, FixedBuffer, CFiles, UInt, String
 
 naiad_room = Struct('struct naiad_room', 'naiad_room', 'pypm', [
 		UInt('flags'),
-		String('topic'),
+		Struct('struct foo', 'foo', 'pypm', [String('a'), UInt('b')])
 	])
 
 c = CFiles('pynaiad_room', [naiad_room])

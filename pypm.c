@@ -176,6 +176,8 @@ PyMODINIT_FUNC initmayhem(void)
 		return;
 	if ( PyType_Ready(&pypm_naiad_room_pytype) < 0 )
 		return;
+	if ( PyType_Ready(&pypm_foo_pytype) < 0 )
+		return;
 	if ( PyType_Ready(&pypm_naiad_user_pytype) < 0 )
 		return;
 
@@ -214,6 +216,8 @@ PyMODINIT_FUNC initmayhem(void)
 				(PyObject *)&pypm_naiad_goldshow_pytype);
 	PyModule_AddObject(m, "naiad_room",
 				(PyObject *)&pypm_naiad_room_pytype);
+	PyModule_AddObject(m, "foo",
+				(PyObject *)&pypm_foo_pytype);
 	PyModule_AddObject(m, "naiad_user",
 				(PyObject *)&pypm_naiad_user_pytype);
 }

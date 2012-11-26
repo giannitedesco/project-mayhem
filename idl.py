@@ -96,6 +96,11 @@ class Struct:
 		self.doc = doc
 		self.byref = byref
 
+	def get(self, ref):
+		return '%s_New(&%s);'%(self.fullname, ref)
+	def set(self, ref, val):
+		return 'memcpy(%s, %s, sizeof(%s)), 0'%(ref, val, ref)
+
 	def __get_fullname(self):
 		if self.modname is None:
 			return self.name
@@ -113,6 +118,9 @@ class Struct:
 
 	def __getattr__(self, attr):
 		d = {'fullname': self.__get_fullname, 
+			'name': self.name,
+			'get': self.get,
+			'get': self.set,
 			'deref': self.__get_deref,
 			'doc': self.__get_doc}
 		if d.has_key(attr):
@@ -161,6 +169,10 @@ class Struct:
 		return '\n'.join(l) + '\n'
 
 	def decls(self):
+		r = ''
+		for f in self.fields:
+			if isinstance(f, Struct):
+				r += f.decls() + '\n'
 		l = []
 		l.append('struct %s {'%self.fullname)
 		l.append('\tPyObject_HEAD;')
@@ -169,9 +181,13 @@ class Struct:
 		l.append('extern PyTypeObject %s_pytype;'%(self.fullname))
 		l.append('PyObject *%s_New(%s *%s);'%(self.fullname, self.ctype, self.name))
 		l.append('int %s_Check(PyObject *obj);'%(self.fullname))
-		return '\n'.join(l) + '\n'
+		return r + '\n'.join(l) + '\n'
 
 	def defns(self):
+		r = ''
+		for f in self.fields:
+			if isinstance(f, Struct):
+				r += f.defns() + '\n'
 		l = []
 		l.append('static PyMethodDef %s_methods[] = {'%self.fullname)
 		l.append('\t{NULL, }')
@@ -225,7 +241,7 @@ class Struct:
 		l.append('\tmemcpy(&self->%s, %s, sizeof(self->%s));'%(self.name, self.name, self.name))
 		l.append('\treturn (PyObject *)self;')
 		l.append('}')
-		return '\n'.join(l)
+		return r + '\n'.join(l)
 
 class CFiles:
 	def __init__(self, name, structs):
