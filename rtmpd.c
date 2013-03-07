@@ -218,187 +218,32 @@ int rtmp_send(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 	return 1;
 }
 
-static int send_server_bw(struct _rtmp *r)
-{
-	uint8_t buf[4];
-	encode_int32(buf, r->server_bw);
-	return rtmp_send(r, 2, 0, 0xfe227, RTMP_MSG_SERVER_BW, buf, sizeof(buf));
-}
-
-static int send_ctl(struct _rtmp *r, uint16_t type, uint32_t val, uint32_t ts)
-{
-	uint8_t buf[6];
-	uint8_t *ptr = buf;
-
-	encode_int16(ptr, type), ptr += 2;
-	encode_int32(ptr, val), ptr += 4;
-	return rtmp_send(r, 2, 0, ts, RTMP_MSG_CTL, buf, ptr - buf);
-}
-
-static int r_invoke(struct _rtmp *r, struct rtmp_pkt *pkt,
-			 const uint8_t *buf, size_t sz)
-{
-	invoke_t inv;
-	int ret = 0;
-
-	inv = amf_invoke_from_buf(buf, sz);
-	if ( NULL == inv )
-		goto out;
-
-	dprintf("rtmp: invoke: chan=0x%x dest=0x%x\n", pkt->chan, pkt->dest);
-	amf_invoke_pretty_print(inv);
-	if ( r->ev_ops && r->ev_ops->invoke ) {
-		ret = (*r->ev_ops->invoke)(r->ev_priv, inv);
-		if ( !ret ) {
-			printf("rtmp: received: bad INVOKE\n");
-			amf_invoke_pretty_print(inv);
-		}
-	}else{
-		printf("rtmp: received: unhandled INVOKE\n");
-		amf_invoke_pretty_print(inv);
-		ret = 1;
-	}
-	amf_invoke_free(inv);
-out:
-	return 1;
-}
-
-static int r_ctl(struct _rtmp *r, struct rtmp_pkt *pkt,
-			 const uint8_t *buf, size_t sz)
-{
-	uint16_t type;
-	uint32_t echo;
-
-	if ( sz < sizeof(type) )
-		return 0;
-	type = decode_int16(buf);
-	buf += sizeof(type);
-	sz -= sizeof(type);
-
-	switch(type) {
-	case RTMP_CTL_STREAM_BEGIN:
-		dprintf("rtmp: Stream begin\n");
-		if ( r->ev_ops && r->ev_ops->stream_start ) {
-			return (*r->ev_ops->stream_start)(r->ev_priv);
-		}
-		break;
-	case RTMP_CTL_PING:
-		dprintf("rtmp: PING\n");
-		if ( sz < sizeof(echo) )
-			return 0;
-		echo = decode_int32(buf);
-		return send_ctl(r, RTMP_CTL_PONG, echo, 0xfe227);
-	case RTMP_CTL_PONG:
-		break;
-	default:
-		printf("rtmp: CTL of unknown type %d (0x%x)\n", type, type);
-		hex_dump(buf, sz, 16);
-		break;
-	}
-
-	return 1;
-}
-
-static int r_server_bw(struct _rtmp *r, struct rtmp_pkt *pkt,
-			 const uint8_t *buf, size_t sz)
-{
-	dprintf("rtmp: received: SERVER_BW\n");
-	if ( sz < sizeof(uint32_t) )
-		return 0;
-
-	r->server_bw = decode_int32(buf);
-	return send_server_bw(r);
-}
-
-static int r_client_bw(struct _rtmp *r, struct rtmp_pkt *pkt,
-			 const uint8_t *buf, size_t sz)
-{
-	dprintf("rtmp: received: CLIENT_BW\n");
-	if ( sz < sizeof(uint32_t) )
-		return 0;
-
-	r->client_bw = decode_int32(buf);
-	if ( sz > sizeof(uint32_t) )
-		r->client_bw2 = buf[4];
-
-	return 1;
-}
-
-static int r_chunksz(struct _rtmp *r, struct rtmp_pkt *pkt,
-			 const uint8_t *buf, size_t sz)
-{
-	if ( sz < sizeof(uint32_t) )
-		return 0;
-	rbuf_request_size(r, decode_int32(buf));
-	return 1;
-}
-
-static int r_notify(struct _rtmp *r, struct rtmp_pkt *pkt,
-			 const uint8_t *buf, size_t sz)
-{
-	dprintf("rtmp: notify: chan=0x%x dest=0x%x\n", pkt->chan, pkt->dest);
-	if ( r->ev_ops && r->ev_ops->notify ) {
-		return (*r->ev_ops->notify)(r->ev_priv, pkt, buf, sz);
-	}
-	return 1;
-}
-
-static int r_audio(struct _rtmp *r, struct rtmp_pkt *pkt,
-			 const uint8_t *buf, size_t sz)
-{
-	r->nbytes += sz;
-	if ( r->ev_ops && r->ev_ops->audio ) {
-		return (*r->ev_ops->audio)(r->ev_priv, pkt, buf, sz);
-	}
-	return 1;
-}
-
-static int r_video(struct _rtmp *r, struct rtmp_pkt *pkt,
-			 const uint8_t *buf, size_t sz)
-{
-	r->nbytes += sz;
-	if ( r->ev_ops && r->ev_ops->video ) {
-		return (*r->ev_ops->video)(r->ev_priv, pkt, buf, sz);
-	}
-	return 1;
-}
-
-typedef int (*rmsg_t)(struct _rtmp *r, struct rtmp_pkt *pkt,
-			 const uint8_t *buf, size_t sz);
-
 static int rtmp_dispatch(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 			 uint8_t type, const uint8_t *buf, size_t sz)
 {
-	static const rmsg_t tbl[] = {
-		[RTMP_MSG_CHUNK_SZ] r_chunksz,
-		[RTMP_MSG_CTL] r_ctl,
-		[RTMP_MSG_SERVER_BW] r_server_bw,
-		[RTMP_MSG_CLIENT_BW] r_client_bw,
-		[RTMP_MSG_AUDIO] r_audio,
-		[RTMP_MSG_VIDEO] r_video,
-		[RTMP_MSG_NOTIFY] r_notify,
-		[RTMP_MSG_INVOKE] r_invoke,
-	};
-	struct rtmp_pkt pkt;
-	int ret;
+	invoke_t inv;
 
-	pkt.chan = chan;
-	pkt.dest = dest;
-	pkt.ts = ts;
-	pkt.type = type;
+	printf(".id = %d (0x%x)\n", chan, chan);
+	printf(".dest = %d (0x%x)\n", dest, dest);
+	printf(".ts = %d (0x%x)\n", ts, ts);
+	printf(".sz = %zu\n", sz);
+	printf(".type = %d (0x%x)\n", type, type);
 
-	if ( type >= ARRAY_SIZE(tbl) || NULL == tbl[type] ) {
-		printf(".id = %d (0x%x)\n", chan, chan);
-		printf(".dest = %d (0x%x)\n", dest, dest);
-		printf(".ts = %d (0x%x)\n", ts, ts);
-		printf(".sz = %zu\n", sz);
-		printf(".type = %d (0x%x)\n", type, type);
+	switch(type) {
+	case RTMP_MSG_NOTIFY:
+	case RTMP_MSG_INVOKE:
+		inv = amf_invoke_from_buf(buf, sz);
+		if ( inv ) {
+			amf_invoke_pretty_print(inv);
+			amf_invoke_free(inv);
+			break;
+		}
+		/* fall through */
+	default:
 		hex_dump(buf, sz, 16);
-		return 1;
+		break;
 	}
-
-	ret = (*tbl[type])(r, &pkt, buf, sz);
-	return ret;
+	return 1;
 }
 
 /* sigh.. */

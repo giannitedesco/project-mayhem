@@ -45,7 +45,7 @@ WFLAGS := \
 	-Wmissing-noreturn \
 	-finline-functions \
 	-Wmissing-format-attribute \
-	-Iinclude -DWMDUMP_DEBUG=1
+	-Iinclude
 
 ifeq ($(HAVE_PYTHON), yes)
 CFLAGS := $(PYTHON_CFLAGS) $(EXTRA_DEFS) $(WFLAGS) -fPIC
