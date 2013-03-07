@@ -1,7 +1,8 @@
 from urlparse import urlparse
 from collections import deque
-import httplib
+import httplib2
 import threading
+from os import environ, path
 
 from webparser import WebParser
 from formripper import FormRipper
@@ -51,17 +52,20 @@ class WebConn(WorkQueue):
 		self.hostname = u.hostname
 		self.port = u.port
 		print 'conn:', u.hostname, u.port
-		self.conn = httplib.HTTPConnection(u.hostname, u.port)
+		p = environ.get('HOME')
+		if p is None:
+			p = environ.get('APPDATA')
+		self.cache_dir = path.join(p, ".mayhem/cache")
+		self.conn = httplib2.Http(cache = self.cache_dir)
+
 	def pushreq(self, req):
 		assert(req.url.hostname == self.hostname)
 		assert(req.url.port == self.port)
 		self.push(req)
 	def _do_work(self, req):
+		url = req.url.geturl()
 		try:
-			self.conn.request(req.method, req.url.path,
-					req.content, req.headers)
-			r = self.conn.getresponse()
-			d = r.read()
+			(r, d) = self.conn.request(url)
 		except Exception, e:
 			r = e
 			d = None
