@@ -7,9 +7,11 @@
 #include <list.h>
 #include <nbio.h>
 #include <nbio-connecter.h>
+#include <nbio-listener.h>
 #include <rtmp/amf.h>
 #include <rtmp/rtmp.h>
 #include <rtmp/proto.h>
+#include <rtmp/rtmpd.h>
 
 #include "amfbuf.h"
 
@@ -346,6 +348,7 @@ static int r_invoke(struct _rtmp *r, struct rtmp_pkt *pkt,
 		goto out;
 
 	dprintf("rtmp: invoke: chan=0x%x dest=0x%x\n", pkt->chan, pkt->dest);
+	amf_invoke_pretty_print(inv);
 	if ( r->ev_ops && r->ev_ops->invoke ) {
 		ret = (*r->ev_ops->invoke)(r->ev_priv, inv);
 		if ( !ret ) {
@@ -872,8 +875,8 @@ rtmp_t rtmp_connect(struct iothread *t, const char *tcUrl,
 		goto out_free;
 
 	dprintf("rtmp: Connecting to: %s:%d\n", name, port);
-	ret = connecter(t, name, port, conn_cb, r);
-	//ret = connecter(t, "127.0.0.1", port, conn_cb, r);
+	//ret = connecter(t, name, port, conn_cb, r);
+	ret = connecter(t, "127.0.0.1", 12345, conn_cb, r);
 	free(name);
 
 	if ( !ret )
@@ -887,6 +890,42 @@ out_free:
 	r = NULL;
 out:
 	return r;
+}
+
+static void listen_cb(struct iothread *t, int s, void *priv)
+{
+}
+
+static void listen_oom(struct iothread *t, struct nbio *io)
+{
+}
+
+struct _rtmp_listener {
+	listener_t listener;
+	void *priv;
+};
+rtmp_listener_t rtmp_listen(struct iothread *t, const char *addr, uint16_t port,
+				void *priv)
+{
+	struct _rtmp_listener *l = NULL;
+
+	l = calloc(1, sizeof(*l));
+	if ( NULL == l )
+		goto out;
+
+	l->priv = priv;
+	l->listener = listener_tcp(t, addr, port, listen_cb, l, listen_oom);
+	if ( NULL == l->listener )
+		goto out_free;
+
+	/* success */
+	goto out;
+
+out_free:
+	free(l);
+	l = NULL;
+out:
+	return l;
 }
 
 void rtmp_close(rtmp_t r)

@@ -45,7 +45,7 @@ WFLAGS := \
 	-Wmissing-noreturn \
 	-finline-functions \
 	-Wmissing-format-attribute \
-	-Iinclude
+	-Iinclude -DWMDUMP_DEBUG=1
 
 ifeq ($(HAVE_PYTHON), yes)
 CFLAGS := $(PYTHON_CFLAGS) $(EXTRA_DEFS) $(WFLAGS) -fPIC
@@ -60,7 +60,7 @@ OS_OBJ := blob.o os-posix.o
 endif
 
 # Internal "static libraries"
-NBIO_OBJ := nbio.o nbio-connecter.o $(NBIO_MOD)
+NBIO_OBJ := nbio.o nbio-connecter.o nbio-listener.o $(NBIO_MOD)
 AMF_OBJ := amf3.o \
 		amf.o \
 		hexdump.o
@@ -98,12 +98,20 @@ PYPM_OBJ := $(OS_OBJ) \
 		pynaiad_user.o \
 		pymayhem.o
 
-ALL_BIN := $(DUMP_BIN) $(AMFPARSE_BIN)
+RTMPROX_BIN := rtmprox$(SUFFIX)
+RTMPROX_LIBS := 
+RTMPROX_OBJ := $(OS_OBJ) \
+		$(NBIO_OBJ) \
+		$(AMF_OBJ) \
+		rtmp.o \
+		rtmprox.o
+
+ALL_BIN := $(DUMP_BIN) $(AMFPARSE_BIN) $(RTMPROX_BIN)
 ALL_LIB := 
 ifeq ($(HAVE_PYTHON), yes)
 ALL_LIB += $(PYPM_LIB)
 endif
-ALL_OBJ := $(DUMP_OBJ) $(AMFPARSE_OBJ) $(PYPM_OBJ)
+ALL_OBJ := $(DUMP_OBJ) $(AMFPARSE_OBJ) $(PYPM_OBJ) $(RTMPROX_OBJ)
 ALL_DEP := $(patsubst %.o, .%.d, $(ALL_OBJ))
 ALL_TARGETS := $(ALL_BIN) $(ALL_LIB)
 
@@ -150,6 +158,10 @@ $(DUMP_BIN): $(DUMP_OBJ)
 $(AMFPARSE_BIN): $(AMFPARSE_OBJ)
 	@echo " [LINK] $@"
 	@$(CC) $(CFLAGS) -o $@ $(AMFPARSE_OBJ) $(AMFPARSE_LIBS)
+
+$(RTMPROX_BIN): $(RTMPROX_OBJ)
+	@echo " [LINK] $@"
+	@$(CC) $(CFLAGS) -o $@ $(RTMPROX_OBJ) $(RTMPROX_LIBS)
 
 $(PYPM_LIB): $(PYPM_OBJ)
 	@echo " [LINK] $@"

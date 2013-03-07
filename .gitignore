@@ -1,6 +1,8 @@
 .*.d
 *.o
 *.pyc
+rtmprox
+rtmprox.exe
 wmdump
 wmdump.exe
 mayhem.so

@@ -5,11 +5,11 @@
 #ifndef _RTMP__H
 #define _RTMP__H
 
+/* generic bits */
 #define RTMP_SCHEME			"rtmp://"
 #define RTMP_DEFAULT_PORT		1935
 
-typedef struct _rtmp *rtmp_t;
-
+char *rtmp_urlparse(const char *url, uint16_t *port, char **path);
 struct rtmp_pkt {
 	int chan;
 	uint32_t dest;
@@ -17,6 +17,7 @@ struct rtmp_pkt {
 	uint8_t type;
 };
 
+/* RTMP client API */
 struct rtmp_ops {
 	int(*invoke)(void *priv, invoke_t inv);
 	int(*notify)(void *priv, struct rtmp_pkt *pkt,
@@ -31,7 +32,7 @@ struct rtmp_ops {
 	void(*conn_reset)(void *priv, const char *reason);
 };
 
-char *rtmp_urlparse(const char *url, uint16_t *port, char **path);
+typedef struct _rtmp *rtmp_t;
 
 rtmp_t rtmp_connect(struct iothread *t, const char *tcUrl,
 			const struct rtmp_ops *ops, void *priv);
