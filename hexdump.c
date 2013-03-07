@@ -6,7 +6,10 @@ void hex_dumpf(FILE *f, const uint8_t *tmp, size_t len, size_t llen)
 	size_t i, j;
 	size_t line;
 
-	if ( NULL == f || 0 == len || 0 == llen)
+	if ( !llen )
+		llen =16;
+
+	if ( NULL == f || 0 == len )
 		return;
 
 	for(j = 0; j < len; j += line, tmp += line) {

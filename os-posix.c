@@ -37,6 +37,11 @@ const char *sock_err(void)
 	return strerror(errno);
 }
 
+const char *os_err(void)
+{
+	return strerror(errno);
+}
+
 ssize_t sock_send(os_sock_t sock, const uint8_t *buf, size_t len)
 {
 	return send(sock, buf, len, MSG_NOSIGNAL);

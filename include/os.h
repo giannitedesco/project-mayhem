@@ -29,4 +29,6 @@ void sock_fini(void);
 
 void os_reseed_rand(void);
 
+const char *os_err(void);
+
 #endif /* _WMDUMP_OS_H */

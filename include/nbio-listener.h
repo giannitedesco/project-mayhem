@@ -3,7 +3,7 @@
 
 typedef struct _listener *listener_t;
 
-typedef void(*listener_cbfn_t)(struct iothread *t, int s, void *priv);
+typedef void(*listener_cbfn_t)(struct iothread *t, os_sock_t s, void *priv);
 typedef void(*listener_oom_t)(struct iothread *t, struct nbio *io);
 
 listener_t listener_tcp(struct iothread *t, const char *addr, uint16_t port,

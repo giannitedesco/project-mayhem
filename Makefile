@@ -103,7 +103,8 @@ RTMPROX_LIBS :=
 RTMPROX_OBJ := $(OS_OBJ) \
 		$(NBIO_OBJ) \
 		$(AMF_OBJ) \
-		rtmp.o \
+		hgang.o \
+		rtmpd.o \
 		rtmprox.o
 
 ALL_BIN := $(DUMP_BIN) $(AMFPARSE_BIN) $(RTMPROX_BIN)
