@@ -34,14 +34,15 @@ struct rtmp_chan {
 	uint8_t type;
 };
 
-struct _rtmp {
+struct _rtmpd {
 	struct nbio io;
 	struct iothread *t;
 
+	const struct rtmpd_ops *ev_ops;
+	void *ev_priv;
+
 	uint8_t *r_buf;
 	uint8_t *r_cur;
-	const struct rtmp_ops *ev_ops;
-	void *ev_priv;
 	size_t chunk_sz;
 	size_t r_space;
 	uint8_t state;
@@ -56,9 +57,9 @@ struct _rtmp {
 	struct rtmp_chan chan[RTMP_MAX_CHANNELS];
 };
 
-static int transition(struct _rtmp *r, unsigned int state);
+static int transition(struct _rtmpd *r, unsigned int state);
 
-static size_t current_buf_sz(struct _rtmp *r)
+static size_t current_buf_sz(struct _rtmpd *r)
 {
 	if ( NULL == r->r_buf )
 		return 0;
@@ -68,7 +69,7 @@ static size_t current_buf_sz(struct _rtmp *r)
 /* do not use... only for mainloop to adjust when no other code is
  * using the data in the buffer
 */
-static int rbuf_update_size(struct _rtmp *r)
+static int rbuf_update_size(struct _rtmpd *r)
 {
 	uint8_t *new;
 	size_t ofs;
@@ -90,7 +91,7 @@ static int rbuf_update_size(struct _rtmp *r)
  * re-sized while the recv/dispatch main program loop still has unprocessed
  * packet data in there
 */
-static int rbuf_request_size(struct _rtmp *r, size_t sz)
+static int rbuf_request_size(struct _rtmpd *r, size_t sz)
 {
 	/* paranoia */
 	if ( sz == 0 )
@@ -164,7 +165,7 @@ static size_t hdr_small(uint8_t *buf, int chan, uint32_t dest, uint32_t ts,
 	return encode_chan(buf, 3, chan);
 }
 
-static int rtmp_send_raw(struct _rtmp *r, const uint8_t *buf, size_t len)
+static int rtmp_send_raw(struct _rtmpd *r, const uint8_t *buf, size_t len)
 {
 	const uint8_t *end;
 	ssize_t ret;
@@ -189,7 +190,7 @@ static int rtmp_send_raw(struct _rtmp *r, const uint8_t *buf, size_t len)
 	return 1;
 }
 
-int rtmp_send(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
+int rtmpd_send(struct _rtmpd *r, int chan, uint32_t dest, uint32_t ts,
 			uint8_t type, const uint8_t *pkt, size_t len)
 {
 	uint8_t buf[RTMP_HDR_MAX_SZ + r->chunk_sz];
@@ -218,36 +219,23 @@ int rtmp_send(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
 	return 1;
 }
 
-static int rtmp_dispatch(struct _rtmp *r, int chan, uint32_t dest, uint32_t ts,
+static int rtmp_dispatch(struct _rtmpd *r, int chan, uint32_t dest, uint32_t ts,
 			 uint8_t type, const uint8_t *buf, size_t sz)
 {
-	invoke_t inv;
+	struct rtmp_pkt pkt;
 
-	printf(".id = %d (0x%x)\n", chan, chan);
-	printf(".dest = %d (0x%x)\n", dest, dest);
-	printf(".ts = %d (0x%x)\n", ts, ts);
-	printf(".sz = %zu\n", sz);
-	printf(".type = %d (0x%x)\n", type, type);
+	pkt.chan = chan;
+	pkt.dest = dest;
+	pkt.ts = ts;
+	pkt.type = type;
+	if ( r->ev_ops )
+		(*r->ev_ops->pkt)(r, &pkt, buf, sz);
 
-	switch(type) {
-	case RTMP_MSG_NOTIFY:
-	case RTMP_MSG_INVOKE:
-		inv = amf_invoke_from_buf(buf, sz);
-		if ( inv ) {
-			amf_invoke_pretty_print(inv);
-			amf_invoke_free(inv);
-			break;
-		}
-		/* fall through */
-	default:
-		hex_dump(buf, sz, 16);
-		break;
-	}
 	return 1;
 }
 
 /* sigh.. */
-static ssize_t decode_rtmp(struct _rtmp *r, const uint8_t *buf, size_t sz)
+static ssize_t decode_rtmp(struct _rtmpd *r, const uint8_t *buf, size_t sz)
 {
 	static const size_t sizes[] = {12, 8, 4, 1};
 	struct rtmp_chan *pkt;
@@ -345,7 +333,7 @@ static ssize_t decode_rtmp(struct _rtmp *r, const uint8_t *buf, size_t sz)
 	return (ptr - buf);
 }
 
-static int init(struct _rtmp *r)
+static int init(struct _rtmpd *r)
 {
 	/* make space for the client handshake */
 	if ( !rbuf_request_size(r, RTMP_HANDSHAKE_LEN + 1) )
@@ -353,7 +341,7 @@ static int init(struct _rtmp *r)
 	return 1;
 }
 
-static int handshake1(struct _rtmp *r)
+static int handshake1(struct _rtmpd *r)
 {
 	uint8_t buf[RTMP_HANDSHAKE_LEN * 2 + 1];
 	unsigned int i;
@@ -375,7 +363,7 @@ static int handshake1(struct _rtmp *r)
 	return 1;
 }
 
-static int transition(struct _rtmp *r, unsigned int state)
+static int transition(struct _rtmpd *r, unsigned int state)
 {
 	const char *str;
 	int ret;
@@ -389,10 +377,10 @@ static int transition(struct _rtmp *r, unsigned int state)
 		}else{
 			str = "connection reset by peer";
 		}
-		r->state = state;
 		if ( r->ev_ops )
-			(*r->ev_ops->conn_reset)(r->ev_priv, str);
+			(*r->ev_ops->conn_reset)(r, str);
 		r->conn_reset = 1;
+		r->state = state;
 		nbio_del(r->t, &r->io);
 		return 0;
 	case STATE_HANDSHAKE_1:
@@ -417,7 +405,7 @@ static int transition(struct _rtmp *r, unsigned int state)
 	return ret;
 }
 
-static ssize_t handshake1_req(struct _rtmp *r, const uint8_t *buf, size_t len)
+static ssize_t handshake1_req(struct _rtmpd *r, const uint8_t *buf, size_t len)
 {
 	if ( len < RTMP_HANDSHAKE_LEN + 1)
 		return -1;
@@ -430,7 +418,7 @@ static ssize_t handshake1_req(struct _rtmp *r, const uint8_t *buf, size_t len)
 	return RTMP_HANDSHAKE_LEN + 1;
 }
 
-static ssize_t handshake2_req(struct _rtmp *r, const uint8_t *buf, size_t len)
+static ssize_t handshake2_req(struct _rtmpd *r, const uint8_t *buf, size_t len)
 {
 	if ( len < RTMP_HANDSHAKE_LEN )
 		return -1;
@@ -444,7 +432,7 @@ static ssize_t handshake2_req(struct _rtmp *r, const uint8_t *buf, size_t len)
 	return RTMP_HANDSHAKE_LEN;
 }
 
-static ssize_t rtmp_drain_buf(struct _rtmp *r)
+static ssize_t rtmp_drain_buf(struct _rtmpd *r)
 {
 	const uint8_t *buf = r->r_buf;
 	size_t sz = r->r_cur - r->r_buf;
@@ -475,7 +463,7 @@ static ssize_t rtmp_drain_buf(struct _rtmp *r)
 	return ret;
 }
 
-static int fill_rcv_buf(struct _rtmp *r)
+static int fill_rcv_buf(struct _rtmpd *r)
 {
 	ssize_t ret;
 	assert(r->r_space);
@@ -500,7 +488,7 @@ static int fill_rcv_buf(struct _rtmp *r)
 	return 1;
 }
 
-static void rtmp_pump(rtmp_t r)
+static void rtmp_pump(struct _rtmpd *r)
 {
 	ssize_t taken;
 
@@ -541,31 +529,34 @@ again:
 
 static void iop_read(struct iothread *t, struct nbio *io)
 {
-	struct _rtmp *r = (struct _rtmp *)io;
+	struct _rtmpd *r = (struct _rtmpd *)io;
 	rtmp_pump(r);
 }
 
 static void iop_write(struct iothread *t, struct nbio *io)
 {
-	struct _rtmp *r = (struct _rtmp *)io;
+	struct _rtmpd *r = (struct _rtmpd *)io;
 	transition(r, r->state);
 }
 
-static void rtmp_dtor(struct _rtmp *r)
+static hgang_t conns;
+static void rtmp_dtor(struct _rtmpd *r)
 {
 	unsigned int i;
+	if ( r->ev_ops )
+		(*r->ev_ops->dtor)(r);
 	for(i = 0; i < RTMP_MAX_CHANNELS; i++) {
 		free(r->chan[i].p_buf);
 	}
 	free(r->r_buf);
 	sock_close(r->io.fd);
 	r->io.fd = BAD_SOCKET;
-	free(r);
+	hgang_return(conns, r);
 }
 
 static void iop_dtor(struct iothread *t, struct nbio *io)
 {
-	struct _rtmp *r = (struct _rtmp *)io;
+	struct _rtmpd *r = (struct _rtmpd *)io;
 	r->conn_reset = 1;
 	if ( r->killed )
 		rtmp_dtor(r);
@@ -577,14 +568,12 @@ static const struct nbio_ops iops = {
 	.dtor = iop_dtor,
 };
 
-
 /* --- listener infrastructure --- */
-static hgang_t conns;
 
 static int rtmpd_init(void)
 {
 	if ( NULL == conns ) {
-		conns = hgang_new(sizeof(struct _rtmp), 0);
+		conns = hgang_new(sizeof(struct _rtmpd), 0);
 		if ( NULL == conns )
 			return 0;
 	}
@@ -593,13 +582,14 @@ static int rtmpd_init(void)
 
 struct _rtmp_listener {
 	listener_t listener;
+	const struct rtmpd_ops *ops;
 	void *priv;
 };
 
 static void listen_cb(struct iothread *t, int s, void *priv)
 {
 	struct _rtmp_listener *l = priv;
-	struct _rtmp *r;
+	struct _rtmpd *r;
 
 	(void)l->priv;
 
@@ -613,6 +603,14 @@ static void listen_cb(struct iothread *t, int s, void *priv)
 	r->io.fd = s;
 	r->io.ops = &iops;
 	r->t = t;
+	r->ev_ops = l->ops;
+	if ( r->ev_ops ) {
+		if ( !(*r->ev_ops->ctor)(r, l->priv) ) {
+			sock_close(s);
+			hgang_return(conns, r);
+			return;
+		}
+	}
 	nbio_add(t, &r->io, NBIO_READ);
 	transition(r, STATE_HANDSHAKE_1);
 	dprintf("rtmpd: Got connection\n");
@@ -624,7 +622,7 @@ static void listen_oom(struct iothread *t, struct nbio *io)
 }
 
 rtmp_listener_t rtmp_listen(struct iothread *t, const char *addr, uint16_t port,
-				void *priv)
+				const struct rtmpd_ops *ops, void *priv)
 {
 	struct _rtmp_listener *l = NULL;
 
@@ -635,6 +633,7 @@ rtmp_listener_t rtmp_listen(struct iothread *t, const char *addr, uint16_t port,
 	if ( NULL == l )
 		goto out;
 
+	l->ops = ops;
 	l->priv = priv;
 	l->listener = listener_tcp(t, addr, port, listen_cb, l, listen_oom);
 	if ( NULL == l->listener )
@@ -650,3 +649,30 @@ out:
 	return l;
 }
 
+void rtmpd_close(rtmpd_t r)
+{
+	if ( r ) {
+		r->killed = 1;
+		if ( r->conn_reset ) {
+			rtmp_dtor(r);
+		}else{
+			nbio_del(r->t, &r->io);
+		}
+	}
+}
+
+void rtmpd_set_handlers(rtmpd_t r, const struct rtmpd_ops *ops, void *priv)
+{
+	r->ev_ops = ops;
+	r->ev_priv = priv;
+}
+
+void rtmpd_set_priv(rtmpd_t r, void *priv)
+{
+	r->ev_priv = priv;
+}
+
+void *rtmpd_get_priv(rtmpd_t r)
+{
+	return r->ev_priv;
+}
