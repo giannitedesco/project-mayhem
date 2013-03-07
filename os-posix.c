@@ -22,6 +22,9 @@
 */
 #ifndef MSG_NOSIGNAL
 #define MSG_NOSIGNAL 0
+#define DO_SIGPIPE 1
+#else
+#define DO_SIGPIPE 0
 #endif
 
 void os_reseed_rand(void)
@@ -118,7 +121,7 @@ int sock_blocking(os_sock_t s, int b)
 	return 1;
 }
 
-#ifndef __linux__
+#if DO_SIGPIPE
 static int sig_pipeignore(void)
 {
 	if ( signal(SIGPIPE, SIG_IGN) == SIG_ERR )
@@ -130,7 +133,7 @@ static int sig_pipeignore(void)
 
 int sock_init(int globalstate)
 {
-#ifndef __linux__
+#if DO_SIGPIPE
 	if ( globalstate && !sig_pipeignore() )
 		return 0;
 #endif
