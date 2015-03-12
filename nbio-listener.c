@@ -11,6 +11,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <linux/netfilter_ipv4.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <unistd.h>
@@ -31,6 +32,23 @@ struct _listener {
 void listener_wake(struct iothread *t, struct nbio *io)
 {
 	nbio_wake(t, io, NBIO_READ);
+}
+
+int listener_original_dst(struct nbio *io, uint32_t *addr, uint16_t *port)
+{
+	struct sockaddr_in orig;
+	socklen_t olen = sizeof(orig);
+
+	if ( !getsockopt(io->fd, SOL_IP, SO_ORIGINAL_DST, &orig, &olen) &&
+			olen >= sizeof(orig) ) {
+		if ( addr )
+			*addr = orig.sin_addr.s_addr;
+		if ( port )
+			*port = htons(orig.sin_port);
+		return 1;
+	}
+
+	return 0;
 }
 
 static void listener_read(struct iothread *t, struct nbio *io)

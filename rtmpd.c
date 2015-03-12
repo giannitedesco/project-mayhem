@@ -296,7 +296,7 @@ static ssize_t decode_rtmp(struct _rtmpd *r, const uint8_t *buf, size_t sz)
 		pkt->p_left = pkt->sz;
 	}
 
-	chunk_sz = (pkt->p_left < r->chunk_sz) ? 
+	chunk_sz = (pkt->p_left < r->chunk_sz) ?
 		pkt->p_left : r->chunk_sz;
 
 	if ( ptr + chunk_sz > end ) {
@@ -428,6 +428,9 @@ static ssize_t handshake2_req(struct _rtmpd *r, const uint8_t *buf, size_t len)
 
 	if ( !transition(r, STATE_READY) )
 		return 0;
+
+	if ( r->ev_ops )
+		(*r->ev_ops->connected)(r);
 
 	return RTMP_HANDSHAKE_LEN;
 }
@@ -647,6 +650,11 @@ out_free:
 	l = NULL;
 out:
 	return l;
+}
+
+int rtmpd_original_dst(rtmpd_t r, uint32_t *addr, uint16_t *port)
+{
+	return listener_original_dst(&r->io, addr, port);
 }
 
 void rtmpd_close(rtmpd_t r)

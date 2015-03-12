@@ -27,6 +27,7 @@ class WebParser(HTMLParser):
 		self.stk.pop()
 	def handle_data(self, data):
 		b = 'var hClientFlashVars ='
+		b = 'var flashvars ='
 		if len(self.stk) and not self.stk[-1:][0].lower() == 'script':
 			return
 		s = data.lstrip()
@@ -35,7 +36,8 @@ class WebParser(HTMLParser):
 		if s[:len(b)] != b:
 			return
 
-		s = s[len(b):s.index(';\n')].lstrip()
+		#s = s[len(b):s.index('};')+1].lstrip()
+		s = s[len(b):]
 		obj = jsParser.parseString(s)
 		for k, v in obj[0]:
-			self.result[k] = unquote(v)
+			self.result[k] = v #unquote(v)

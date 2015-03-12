@@ -9,9 +9,14 @@
 
 static const char *cmd;
 
+struct lpriv {
+	const char *url;
+};
+
 static int ctor(rtmpd_t r, void *listener_priv)
 {
-	printf("%s: ctor\n", cmd);
+	struct lpriv *lp = listener_priv;
+	printf("%s: ctor: %s\n", cmd, lp->url);
 	return 1;
 }
 
@@ -48,6 +53,11 @@ static void conn_reset(rtmpd_t r, const char *str)
 	rtmpd_close(r);
 }
 
+static void connected(rtmpd_t r)
+{
+	printf("%s: connected\n", cmd);
+}
+
 static void dtor(rtmpd_t r)
 {
 	printf("%s: dtor\n", cmd);
@@ -57,9 +67,11 @@ int main(int argc, char **argv)
 {
 	struct iothread iothread;
 	struct eventloop *plugin = NULL;
+	struct lpriv lp;
 	int port = 12345;
 	static const struct rtmpd_ops ops = {
 		.ctor = ctor,
+		.connected = connected,
 		.pkt = pkt,
 		.conn_reset = conn_reset,
 		.dtor = dtor,
@@ -84,7 +96,8 @@ int main(int argc, char **argv)
 
 	printf("%s: Using %s eventloop plugin\n",
 		cmd, iothread.plugin->name);
-	rtmp_listen(&iothread, NULL, port, &ops, NULL);
+	lp.url = "rtmp://fcs92-1.streamate.com/reflect/2645379554";
+	rtmp_listen(&iothread, NULL, port, &ops, &lp);
 
 	do{
 		nbio_pump(&iothread, -1);

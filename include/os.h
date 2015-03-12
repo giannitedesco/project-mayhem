@@ -6,6 +6,7 @@
 #define _WMDUMP_OS_H
 
 #ifdef WIN32
+#include <windows.h>
 typedef SOCKET os_sock_t;
 #else
 typedef int os_sock_t;

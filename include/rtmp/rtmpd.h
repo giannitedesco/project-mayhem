@@ -8,6 +8,7 @@
 typedef struct _rtmpd *rtmpd_t;
 struct rtmpd_ops {
 	int (*ctor)(rtmpd_t r, void *listener_priv);
+	void (*connected)(rtmpd_t r);
 	void (*pkt)(rtmpd_t r, struct rtmp_pkt *pkt,
 			const uint8_t *data, size_t len);
 	void (*conn_reset)(rtmpd_t r, const char *str);
@@ -20,6 +21,7 @@ rtmp_listener_t rtmp_listen(struct iothread *t, const char *addr, uint16_t port,
 
 int rtmpd_send(struct _rtmpd *r, int chan, uint32_t dest, uint32_t ts,
 			uint8_t type, const uint8_t *pkt, size_t len);
+int rtmpd_original_dst(rtmpd_t r, uint32_t *addr, uint16_t *port);
 void rtmpd_close(rtmpd_t r);
 void rtmpd_set_handlers(rtmpd_t r, const struct rtmpd_ops *ops, void *priv);
 void rtmpd_set_priv(rtmpd_t r, void *priv);
