@@ -21,7 +21,9 @@ rtmp_listener_t rtmp_listen(struct iothread *t, const char *addr, uint16_t port,
 
 int rtmpd_send(struct _rtmpd *r, int chan, uint32_t dest, uint32_t ts,
 			uint8_t type, const uint8_t *pkt, size_t len);
+#ifdef USE_TPROXY
 int rtmpd_original_dst(rtmpd_t r, uint32_t *addr, uint16_t *port);
+#endif
 void rtmpd_close(rtmpd_t r);
 void rtmpd_set_handlers(rtmpd_t r, const struct rtmpd_ops *ops, void *priv);
 void rtmpd_set_priv(rtmpd_t r, void *priv);

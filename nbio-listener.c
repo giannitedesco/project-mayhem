@@ -11,12 +11,16 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
-#include <linux/netfilter_ipv4.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <limits.h>
+#ifdef USE_TPROXY
+#include <linux/netfilter_ipv4.h>
+#endif
+
 #include <list.h>
 #include <os.h>
 #include <nbio.h>
@@ -34,6 +38,7 @@ void listener_wake(struct iothread *t, struct nbio *io)
 	nbio_wake(t, io, NBIO_READ);
 }
 
+#ifdef USE_TPROXY
 int listener_original_dst(struct nbio *io, uint32_t *addr, uint16_t *port)
 {
 	struct sockaddr_in orig;
@@ -50,6 +55,7 @@ int listener_original_dst(struct nbio *io, uint32_t *addr, uint16_t *port)
 
 	return 0;
 }
+#endif
 
 static void listener_read(struct iothread *t, struct nbio *io)
 {

@@ -652,10 +652,12 @@ out:
 	return l;
 }
 
+#ifdef USE_TPROXY
 int rtmpd_original_dst(rtmpd_t r, uint32_t *addr, uint16_t *port)
 {
 	return listener_original_dst(&r->io, addr, port);
 }
+#endif
 
 void rtmpd_close(rtmpd_t r)
 {

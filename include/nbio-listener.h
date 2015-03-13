@@ -10,6 +10,8 @@ listener_t listener_tcp(struct iothread *t, const char *addr, uint16_t port,
 					listener_cbfn_t cb, void *priv,
 					listener_oom_t oom);
 void listener_wake(struct iothread *t, struct nbio *io);
+#ifdef USE_TPROXY
 int listener_original_dst(struct nbio *io, uint32_t *addr, uint16_t *port);
+#endif
 
 #endif /* _NBIO_LISTENER_H */
