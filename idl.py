@@ -99,7 +99,11 @@ class Struct:
 	def get(self, ref):
 		return '%s_New(&%s);'%(self.fullname, ref)
 	def set(self, ref, val):
-		return 'memcpy(%s, %s, sizeof(%s)), 0'%(ref, val, ref)
+		if ref and ref[0] == '&':
+			sz = ref[1:]
+		else:
+			sz = '*' + ref
+		return 'memcpy(%s, %s, sizeof(%s)), 0'%(ref, val, sz)
 
 	def __get_fullname(self):
 		if self.modname is None:
